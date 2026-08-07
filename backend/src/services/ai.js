@@ -77,23 +77,24 @@ Requirements:
     }
   }
 
-  async chat(message, metrics) {
+  async chat(message, metrics, company) {
     if (!this.apiKey) {
       console.warn('GROQ_API_KEY not found in .env');
       return "AI chatbot unavailable (key missing).";
     }
 
-    const prompt = `You are a financial analyst for Manu Yantralaya. Answer the user's question using only the data provided. Be direct and specific — always cite actual numbers from the data.
+    const datasetName = company || 'this dataset';
+    const prompt = `You are a financial analyst. Answer the user's question about "${datasetName}" using only the data provided. Be direct and specific — always cite actual numbers from the data.
 
-FINANCIAL DATA (monthly):
+FINANCIAL DATA:
 ${JSON.stringify(metrics, null, 2)}
 
 QUESTION: ${message}
 
 RULES:
-- Use exact figures from the data, always with the month name (e.g. "In May, revenue was ₹23.5L")
-- If a trend exists across months, describe it clearly: "Revenue grew from ₹21.5L in April to ₹23.5L in May (+9.5%)"
-- If the question involves a chart or graph, describe what the chart shows: which direction the line moves, which bar is tallest, what the crossover point is
+- Use exact figures from the data
+- If a trend exists, describe it clearly with percentages
+- If the question involves a chart or graph, describe what the chart shows
 - If the data doesn't answer the question, say exactly what's missing
 - No filler, no markdown, no bullet symbols
 - Max 150 words`;

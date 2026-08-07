@@ -28,7 +28,7 @@ const Unauthorized = () => {
         <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '16px' }}>Access Pending</h1>
         
         <p style={{ color: 'var(--text-mid)', fontSize: '15px', lineHeight: '1.6', marginBottom: '32px' }}>
-          Hello, <strong>{user.name || 'User'}</strong>. Your account is currently pending approval by the Manu Yantralaya Administrator.
+          Hello, <strong>{user.name || 'User'}</strong>. Your account is currently pending approval by the Ledgerly Administrator.
         </p>
 
         <div style={{ 

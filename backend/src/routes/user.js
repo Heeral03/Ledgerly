@@ -5,7 +5,7 @@ const db = require('../db/database');
 const { authenticate } = require('../middleware/auth');
 const { encrypt, decrypt } = require('../utils/crypto');
 const { formatRowLabel } = require('../utils/formatters');
-const { getGoogleSheetsExportUrl } = require('../utils/googleSheets');
+const { getGoogleSheetsExportUrl, isValidGoogleSheetsUrl } = require('../utils/googleSheets');
 const upload = require('../middleware/upload');
 
 const router = express.Router();
@@ -86,11 +86,7 @@ router.post('/upload', upload.single('file'), (req, res, next) => {
  */
 router.post('/sync-google-sheet', async (req, res, next) => {
   try {
-    if (req.user.permission !== 'upload') {
-      return res.status(403).json({ error: 'Permission denied. You only have View access.' });
-    }
-
-    const { spreadsheetUrl: rawUrl } = req.body;
+    const { spreadsheetUrl: rawUrl, selectedTab, googleAccessToken } = req.body;
     if (!rawUrl) return res.status(400).json({ error: 'Spreadsheet URL required' });
 
     // Convert to export URL
@@ -101,39 +97,115 @@ router.post('/sync-google-sheet', async (req, res, next) => {
     }
 
     const axios = require('axios');
+    const headers = {};
+    if (googleAccessToken) {
+      headers['Authorization'] = `Bearer ${googleAccessToken}`;
+    }
+
     const response = await axios.get(spreadsheetUrl, { 
+      headers,
       responseType: 'arraybuffer',
-      timeout: 15000 
+      timeout: 15000,
+      maxRedirects: 5,
     });
+
+    // Check if response is HTML (login page redirect)
+    const textSample = Buffer.from(response.data.slice(0, 100)).toString('utf8');
+    if (textSample.trim().startsWith('<!DOCTYPE html') || textSample.trim().startsWith('<html')) {
+      return res.status(400).json({
+        error: 'Google Sheet is not accessible. Please ensure the link is correct and your account has access to it.'
+      });
+    }
+
     const workbook = XLSX.read(response.data, { type: 'buffer' });
 
     let totalRowsCount = 0;
     const allColumns = new Set();
     
-    // Clear old data once before multi-tab sync
+    // Clear old data once before sync
     db.prepare('DELETE FROM uploads WHERE user_id = ?').run(req.user.id);
 
-    workbook.SheetNames.forEach(sheetName => {
+    // Filter to selectedTab if one is specified (not 'all')
+    const tabsToSync = (!selectedTab || selectedTab === 'all')
+      ? workbook.SheetNames
+      : workbook.SheetNames.filter(n => n === selectedTab);
+
+    tabsToSync.forEach(sheetName => {
       const sheet = workbook.Sheets[sheetName];
       const jsonRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
       if (jsonRows.length > 0) {
-        const count = processAndStoreRows(req.user.id, `Google Sheets Sync (${sheetName})`, jsonRows, true); // Pass true to append
+        const count = processAndStoreRows(req.user.id, `${sheetName}`, jsonRows, true);
         totalRowsCount += count;
         Object.keys(jsonRows[0]).forEach(c => allColumns.add(c));
       }
     });
 
-    if (totalRowsCount === 0) return res.status(400).json({ error: 'No data found in any sheet.' });
+    if (totalRowsCount === 0) return res.status(400).json({ error: 'No data found in the selected tab.' });
 
     res.json({
-      message: 'Google Sheets synced and encrypted successfully from all tabs',
+      message: `Synced ${totalRowsCount} rows from ${tabsToSync.join(', ')}`,
       rows: totalRowsCount,
       columns: Array.from(allColumns),
     });
   } catch (err) {
     console.error('Google Sync Error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch or parse Google Sheet. Ensure it is shared correctly.' });
+    res.status(500).json({ error: 'Failed to fetch or parse Google Sheet. Ensure it is shared correctly or reconnect your account.' });
   }
+});
+
+/**
+ * GET /api/user/auto-kpis
+ * Auto-detects 3-5 meaningful KPIs from the user's stored data.
+ */
+router.get('/auto-kpis', (req, res) => {
+  const rows = db.prepare(
+    'SELECT row_data FROM uploads WHERE user_id = ? ORDER BY row_index ASC'
+  ).all(req.user.id);
+
+  if (!rows.length) return res.json({ kpis: [] });
+
+  const decryptedRows = rows.map(row => {
+    const enc = JSON.parse(row.row_data);
+    const cells = {};
+    for (const [col, val] of Object.entries(enc)) cells[col] = decrypt(val);
+    return cells;
+  });
+
+  const columns = Object.keys(decryptedRows[0] || {});
+  const numericCols = columns.filter(col =>
+    decryptedRows.filter(r => r[col] !== '' && !isNaN(Number(r[col]))).length >= Math.ceil(decryptedRows.length * 0.5)
+  );
+
+  // Compute stats for each numeric column
+  const stats = numericCols.map(col => {
+    const vals = decryptedRows.map(r => parseFloat(r[col]) || 0);
+    const sum = vals.reduce((a, b) => a + b, 0);
+    const latest = vals[vals.length - 1];
+    const prev = vals.length > 1 ? vals[vals.length - 2] : latest;
+    const trend = prev !== 0 ? ((latest - prev) / Math.abs(prev)) * 100 : 0;
+    const avg = sum / vals.length;
+    const max = Math.max(...vals);
+    // Score: prefer columns with non-zero sum and meaningful variance
+    const variance = vals.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / vals.length;
+    const score = sum > 0 ? variance / (avg * avg + 1) : 0;
+    return { col, latest, trend, sum, avg, max, score };
+  });
+
+  // Sort by score descending, pick top 5
+  stats.sort((a, b) => b.score - a.score);
+  const top = stats.slice(0, 5);
+
+  const kpis = top.map(s => ({
+    key: s.col,
+    label: s.col,
+    value: s.latest,
+    trend: Math.round(s.trend * 10) / 10,
+    sum: s.sum,
+    avg: s.avg,
+    unit: 'raw',
+  }));
+
+  res.json({ kpis, totalRows: decryptedRows.length, columns: numericCols });
 });
 
 /**
@@ -423,7 +495,7 @@ router.post('/chat', async (req, res, next) => {
       };
     });
 
-    const reply = await aiService.chat(message, decryptedRows);
+    const reply = await aiService.chat(message, decryptedRows, company);
     res.json({ reply });
   } catch (err) {
     next(err);

@@ -378,8 +378,10 @@ export default function AdminDashboard() {
       {/* Sidebar */}
       <aside style={{ width: '260px', background: '#fff', borderRight: '1px solid var(--border-subtle)', padding: '32px 20px', display: 'flex', flexDirection: 'column', boxShadow: '2px 0 8px rgba(26,22,20,0.04)', flexShrink: 0 }}>
         <div style={{ textAlign: 'center', marginBottom: '36px' }}>
-          <img src="/src/assets/logo.png" alt="Logo" style={{ width: '44px', marginBottom: '10px' }} />
-          <p style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-dark)' }}>Manu Yantralaya</p>
+          <div style={{ width: '40px', height: '40px', background: 'var(--primary)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', boxShadow: '0 4px 14px rgba(192,57,43,0.25)' }}>
+            <TrendingUp size={20} color="#fff" />
+          </div>
+          <p style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-dark)', letterSpacing: '-0.3px' }}>Ledgerly</p>
           <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '2px' }}>Admin Portal</p>
         </div>
         {user?.picture && (
