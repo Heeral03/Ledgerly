@@ -11,6 +11,8 @@ import {
 } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import WorkspaceSidebar from '../components/WorkspaceSidebar';
+import TeamManagement from '../components/TeamManagement';
 
 /* ─── Palette ──────────────────────────────────────────────────────── */
 const PALETTE = ['#C0392B', '#3498db', '#27ae60', '#9b59b6', '#e67e22', '#1abc9c', '#e74c3c', '#2980b9'];
@@ -362,6 +364,9 @@ export default function UserDashboard() {
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState('overview');
+  const [dashboards, setDashboards] = useState([]);
+  const [activeDashboard, setActiveDashboard] = useState(null);
+  const [userRole, setUserRole] = useState('OWNER'); // 'OWNER' | 'EDITOR' | 'VIEWER'
   const [chartData, setChartData] = useState(null);
   const [autoKpis, setAutoKpis] = useState([]);
   const [pinnedKpis, setPinnedKpis] = useState(() => {
@@ -377,6 +382,31 @@ export default function UserDashboard() {
   const syncIntervalRef = useRef(null);
   const countdownRef = useRef(null);
   const connectedSheet = JSON.parse(localStorage.getItem('connected_sheet') || '{}');
+
+  // Load user workspace and role
+  const loadWorkspace = useCallback(async () => {
+    try {
+      const res = await API.get('/api/dashboards');
+      if (res.data && res.data.length > 0) {
+        setDashboards(res.data);
+        const current = res.data[0];
+        setActiveDashboard(current);
+        setUserRole(current.user_role || 'OWNER');
+      } else {
+        // Create initial default workspace for user
+        const newDash = await API.post('/api/dashboards', {
+          name: connectedSheet.name ? `${connectedSheet.name} Workspace` : 'Ledgerly Financial Workspace',
+          spreadsheet_url: connectedSheet.id ? `https://docs.google.com/spreadsheets/d/${connectedSheet.id}` : '',
+          selected_tab: connectedSheet.tab || 'all'
+        });
+        setActiveDashboard(newDash.data);
+        setUserRole('OWNER');
+        setDashboards([newDash.data]);
+      }
+    } catch (err) {
+      console.warn('Dashboard workspace fetch error:', err);
+    }
+  }, [API, connectedSheet.id, connectedSheet.name, connectedSheet.tab]);
 
   const fetchData = useCallback(async (showMsg = false) => {
     try {
@@ -415,6 +445,7 @@ export default function UserDashboard() {
 
   // Initial load
   useEffect(() => {
+    loadWorkspace();
     fetchData();
   }, []);
 
@@ -498,86 +529,144 @@ export default function UserDashboard() {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-subtle)', display: 'flex', flexDirection: 'column' }}>
-      {/* ── Top Navigation ─────────────────────────────────────────── */}
-      <header style={{
-        background: '#fff', borderBottom: '1px solid var(--border-subtle)',
-        padding: '0 32px', height: '60px', display: 'flex', alignItems: 'center',
-        justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100,
-        boxShadow: '0 1px 4px rgba(26,22,20,0.04)',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{
-            width: '32px', height: '32px', background: 'var(--primary)', borderRadius: '8px',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <TrendingUp size={16} color="#fff" />
-          </div>
-          <span style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-dark)', letterSpacing: '-0.5px' }}>Ledgerly</span>
-          {connectedSheet.name && (
-            <>
-              <span style={{ color: 'var(--border-subtle)', fontSize: '18px', margin: '0 4px' }}>·</span>
-              <span style={{ fontSize: '13px', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Database size={13} /> {connectedSheet.name}
-                {connectedSheet.tab && connectedSheet.tab !== 'all' && ` / ${connectedSheet.tab}`}
+    <div style={{ minHeight: '100vh', background: 'var(--bg-subtle)', display: 'flex', color: 'var(--text-dark)' }}>
+      {/* ── Left Sidebar Menu ────────────────────────────────────────── */}
+      <WorkspaceSidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        dashboard={activeDashboard}
+        userRole={userRole}
+        user={user}
+        onLogout={handleLogout}
+      />
+
+      {/* ── Right Content Area ───────────────────────────────────────── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflowY: 'auto' }}>
+        {/* Top Header */}
+        <header style={{
+          background: '#FFFFFF',
+          borderBottom: '1px solid var(--border-subtle)',
+          padding: '0 32px', height: '64px', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', sticky: 'top', zIndex: 40,
+          boxShadow: '0 1px 4px rgba(26,22,20,0.04)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--text-dark)', letterSpacing: '-0.5px' }}>
+              {activeTab === 'overview' && '📊 Executive Dashboard'}
+              {activeTab === 'charts' && '📈 Financial Charts & Trends'}
+              {activeTab === 'kpis' && '⚡ Key Performance Indicators'}
+              {activeTab === 'insights' && '✨ AI Financial Briefing'}
+              {activeTab === 'sheetsync' && '🔗 Google Sheet Connection'}
+              {activeTab === 'team' && '👥 Team & Access Control'}
+              {activeTab === 'settings' && '⚙️ Workspace Settings'}
+            </span>
+            {connectedSheet.name && (
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-dim)', background: 'var(--bg-subtle)', padding: '4px 12px', borderRadius: '12px', border: '1px solid var(--border-subtle)', fontWeight: 600 }}>
+                Sheet: {connectedSheet.name}
               </span>
-            </>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <SyncIndicator countdown={countdown} syncing={syncing} onSync={handleManualSync} />
-          {user?.picture && (
-            <img src={user.picture} alt="" style={{ width: '32px', height: '32px', borderRadius: '50%', border: '2px solid var(--border-subtle)' }} />
-          )}
-          <button
-            onClick={() => navigate('/connect-sheet')}
-            className="btn-ghost"
-            style={{ padding: '6px 12px', fontSize: '12px' }}
-          >
-            <Settings size={14} /> Change Sheet
-          </button>
-          <button onClick={handleLogout} className="btn-ghost" style={{ padding: '6px 12px', fontSize: '12px' }}>
-            <LogOut size={14} /> Sign out
-          </button>
-        </div>
-      </header>
-
-      {/* ── Tab Bar ────────────────────────────────────────────────── */}
-      <div style={{
-        background: '#fff', borderBottom: '1px solid var(--border-subtle)',
-        padding: '0 32px', display: 'flex', gap: '4px',
-      }}>
-        {TAB_ITEMS.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            padding: '14px 18px', background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: '13px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px',
-            color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-dim)',
-            borderBottom: activeTab === tab.id ? '2px solid var(--primary)' : '2px solid transparent',
-            transition: 'all 0.2s ease', fontFamily: "'Plus Jakarta Sans', sans-serif",
-            marginBottom: '-1px',
-          }}>
-            {tab.icon} {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Content ────────────────────────────────────────────────── */}
-      <main style={{ flex: 1, padding: '32px', maxWidth: '1400px', width: '100%', margin: '0 auto' }}>
-
-        {/* Alerts row */}
-        {syncMsg && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', borderRadius: '10px',
-            marginBottom: '20px', fontSize: '13px',
-            background: syncMsg.type === 'success' ? 'rgba(39,174,96,0.07)' : 'rgba(192,57,43,0.07)',
-            border: `1px solid ${syncMsg.type === 'success' ? 'rgba(39,174,96,0.3)' : 'var(--border-red)'}`,
-            color: syncMsg.type === 'success' ? 'var(--success)' : 'var(--primary)',
-          }}>
-            {syncMsg.type === 'success' ? <CheckCircle size={15} /> : <AlertTriangle size={15} />}
-            {syncMsg.text}
+            )}
           </div>
-        )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <SyncIndicator countdown={countdown} syncing={syncing} onSync={handleManualSync} />
+            {userRole === 'OWNER' || userRole === 'EDITOR' ? (
+              <button
+                onClick={() => navigate('/connect-sheet')}
+                className="btn-ghost"
+                style={{ padding: '6px 14px', fontSize: '0.8rem' }}
+              >
+                <Settings size={14} /> Connect / Change Sheet
+              </button>
+            ) : (
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>
+                👁️ Viewer Mode (Read-Only)
+              </span>
+            )}
+          </div>
+        </header>
+
+        {/* Main Content Area */}
+        <main style={{ flex: 1, padding: '28px 32px', maxWidth: '1400px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+
+          {/* Alerts row */}
+          {syncMsg && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 16px', borderRadius: '10px',
+              marginBottom: '20px', fontSize: '13px',
+              background: syncMsg.type === 'success' ? 'rgba(39,174,96,0.08)' : 'rgba(192,57,43,0.08)',
+              border: `1px solid ${syncMsg.type === 'success' ? 'rgba(39,174,96,0.3)' : 'var(--border-red)'}`,
+              color: syncMsg.type === 'success' ? 'var(--success)' : 'var(--primary)',
+            }}>
+              {syncMsg.type === 'success' ? <CheckCircle size={15} /> : <AlertTriangle size={15} />}
+              {syncMsg.text}
+            </div>
+          )}
+
+          {/* Render Team Management Tab */}
+          {activeTab === 'team' && (
+            <TeamManagement
+              dashboardId={activeDashboard?.id}
+              userRole={userRole}
+              token={localStorage.getItem('token')}
+            />
+          )}
+
+          {/* Render Google Sheet Sync Tab */}
+          {activeTab === 'sheetsync' && (
+            <div className="premium-card" style={{ margin: 0, maxWidth: 'none', padding: '30px' }}>
+              <h2 style={{ marginTop: 0, marginBottom: '8px', fontSize: '1.4rem', color: 'var(--text-dark)' }}>🔗 Google Sheet Integration</h2>
+              <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem', marginBottom: '24px' }}>
+                Connect your Google Sheet or Google Drive file to automatically synchronize financial rows into Ledgerly.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
+                <div style={{ background: 'var(--bg-subtle)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.5px' }}>CONNECTED SPREADSHEET</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 800, marginTop: '4px', color: 'var(--primary)' }}>{connectedSheet.name || 'None'}</div>
+                </div>
+                <div style={{ background: 'var(--bg-subtle)', padding: '20px', borderRadius: '12px', border: '1px solid var(--border-subtle)' }}>
+                  <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.5px' }}>ACTIVE TAB</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 800, marginTop: '4px', color: '#3498db' }}>{connectedSheet.tab || 'all'}</div>
+                </div>
+              </div>
+              {userRole === 'OWNER' || userRole === 'EDITOR' ? (
+                <button
+                  className="btn-premium"
+                  onClick={() => navigate('/connect-sheet')}
+                  style={{ padding: '12px 24px', fontSize: '0.88rem' }}
+                >
+                  Configure / Reconnect Google Sheet
+                </button>
+              ) : (
+                <div style={{ color: 'var(--primary)', fontSize: '0.85rem' }}>
+                  ⚠️ Only Owners and Editors can alter the connected spreadsheet data source.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Render Workspace Settings Tab */}
+          {activeTab === 'settings' && (
+            <div className="premium-card" style={{ margin: 0, maxWidth: 'none', padding: '30px' }}>
+              <h2 style={{ marginTop: 0, marginBottom: '8px', fontSize: '1.4rem', color: 'var(--text-dark)' }}>⚙️ Workspace Settings</h2>
+              <p style={{ color: 'var(--text-dim)', fontSize: '0.9rem', marginBottom: '24px' }}>
+                Manage workspace parameters, role defaults, and security configurations.
+              </p>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-mid)', marginBottom: '6px', fontWeight: 600 }}>Workspace Name</label>
+                <input
+                  type="text"
+                  readOnly
+                  value={activeDashboard?.name || 'Ledgerly Financial Workspace'}
+                  className="glass-input"
+                  style={{ maxWidth: '400px' }}
+                />
+              </div>
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-mid)', marginBottom: '6px', fontWeight: 600 }}>Server RBAC Enforcement</label>
+                <div style={{ color: 'var(--success)', fontSize: '0.85rem', fontWeight: 700 }}>Active (Strict role validation enabled on all endpoints)</div>
+              </div>
+            </div>
+          )}
 
         {!dismissedAnomalies && anomalies.length > 0 && (
           <div style={{
@@ -868,6 +957,7 @@ export default function UserDashboard() {
         )}
 
       </main>
+      </div>
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }

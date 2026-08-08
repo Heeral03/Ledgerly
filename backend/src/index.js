@@ -8,6 +8,7 @@ const fs = require('fs');
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const userRoutes = require('./routes/user');
+const dashboardRoutes = require('./routes/dashboard');
 
 // Ensure uploads dir exists
 const uploadsDir = path.join(__dirname, '../uploads');
@@ -27,9 +28,10 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 
 // ── Routes ──────────────────────────────────────────────────────────
-app.use('/api/auth',  authRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/user',  userRoutes);
+app.use('/api/auth',       authRoutes);
+app.use('/api/admin',      adminRoutes);
+app.use('/api/user',       userRoutes);
+app.use('/api/dashboards', dashboardRoutes);
 
 // ── Health check ────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ ok: true }));

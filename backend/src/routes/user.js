@@ -6,6 +6,7 @@ const { authenticate } = require('../middleware/auth');
 const { encrypt, decrypt } = require('../utils/crypto');
 const { formatRowLabel } = require('../utils/formatters');
 const { getGoogleSheetsExportUrl, isValidGoogleSheetsUrl } = require('../utils/googleSheets');
+const { parseSheetToRows, cleanCellValue } = require('../utils/sheetParser');
 const upload = require('../middleware/upload');
 
 const router = express.Router();
@@ -17,9 +18,7 @@ router.use(authenticate);
  * Helper to process and store rows for a user.
  */
 function processAndStoreRows(userId, filename, jsonRows, append = false) {
-  if (!jsonRows.length) return 0;
-
-  const sanitise = (val) => String(val).replace(/^[=+\-@]/, "'$&");
+  if (!jsonRows || !jsonRows.length) return 0;
 
   if (!append) {
     db.prepare('DELETE FROM uploads WHERE user_id = ?').run(userId);
@@ -40,7 +39,9 @@ function processAndStoreRows(userId, filename, jsonRows, append = false) {
     rows.forEach((row, i) => {
       const encryptedRow = {};
       for (const [col, val] of Object.entries(row)) {
-        encryptedRow[col] = encrypt(sanitise(val));
+        if (!col || /^__EMPTY/i.test(col)) continue;
+        const cleaned = cleanCellValue(val, false);
+        encryptedRow[col] = encrypt(cleaned);
       }
       insert.run(userId, filename, startIndex + i, JSON.stringify(encryptedRow));
     });
@@ -66,7 +67,7 @@ router.post('/upload', upload.single('file'), (req, res, next) => {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
-    const jsonRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+    const jsonRows = parseSheetToRows(sheet);
 
     const count = processAndStoreRows(req.user.id, req.file.originalname, jsonRows);
 
@@ -132,7 +133,7 @@ router.post('/sync-google-sheet', async (req, res, next) => {
 
     tabsToSync.forEach(sheetName => {
       const sheet = workbook.Sheets[sheetName];
-      const jsonRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      const jsonRows = parseSheetToRows(sheet);
       if (jsonRows.length > 0) {
         const count = processAndStoreRows(req.user.id, `${sheetName}`, jsonRows, true);
         totalRowsCount += count;
@@ -167,7 +168,10 @@ router.get('/auto-kpis', (req, res) => {
   const decryptedRows = rows.map(row => {
     const enc = JSON.parse(row.row_data);
     const cells = {};
-    for (const [col, val] of Object.entries(enc)) cells[col] = decrypt(val);
+    for (const [col, val] of Object.entries(enc)) {
+      if (/^__EMPTY/i.test(col)) continue;
+      cells[col] = decrypt(val);
+    }
     return cells;
   });
 
@@ -222,7 +226,10 @@ router.get('/data', (req, res) => {
   const decrypted = rows.map(row => {
     const enc = JSON.parse(row.row_data);
     const cells = {};
-    for (const [col, val] of Object.entries(enc)) cells[col] = decrypt(val);
+    for (const [col, val] of Object.entries(enc)) {
+      if (/^__EMPTY/i.test(col)) continue;
+      cells[col] = decrypt(val);
+    }
     return { row_index: row.row_index, filename: row.filename, cells, uploaded_at: row.uploaded_at };
   });
 
@@ -244,7 +251,10 @@ router.get('/charts', (req, res) => {
   const decryptedRows = rows.map(row => {
     const enc = JSON.parse(row.row_data);
     const cells = {};
-    for (const [col, val] of Object.entries(enc)) cells[col] = decrypt(val);
+    for (const [col, val] of Object.entries(enc)) {
+      if (/^__EMPTY/i.test(col)) continue;
+      cells[col] = decrypt(val);
+    }
     return cells;
   });
 

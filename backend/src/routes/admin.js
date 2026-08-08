@@ -5,6 +5,7 @@ const { requireRole } = require('../middleware/rbac');
 const { decrypt } = require('../utils/crypto');
 const { formatRowLabel } = require('../utils/formatters');
 const { getGoogleSheetsExportUrl, isValidGoogleSheetsUrl } = require('../utils/googleSheets');
+const { parseSheetToRows, cleanCellValue } = require('../utils/sheetParser');
 
 const router = express.Router();
 
@@ -81,6 +82,7 @@ router.get('/users/:userId/data', (req, res) => {
     const encryptedCells = JSON.parse(row.row_data);
     const cells = {};
     for (const [col, encVal] of Object.entries(encryptedCells)) {
+      if (/^__EMPTY/i.test(col)) continue;
       cells[col] = decrypt(encVal);
     }
     return { id: row.id, row_index: row.row_index, filename: row.filename, cells, uploaded_at: row.uploaded_at };
@@ -104,7 +106,10 @@ router.get('/users/:userId/charts', (req, res) => {
   const decryptedRows = rows.map(row => {
     const enc = JSON.parse(row.row_data);
     const cells = {};
-    for (const [col, val] of Object.entries(enc)) cells[col] = decrypt(val);
+    for (const [col, val] of Object.entries(enc)) {
+      if (/^__EMPTY/i.test(col)) continue;
+      cells[col] = decrypt(val);
+    }
     cells._label = formatRowLabel(cells.Month, cells.Year);
     return cells;
   });
@@ -155,7 +160,7 @@ router.post('/users/:userId/upload', require('../middleware/upload').single('fil
   try {
     const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = xlsx.utils.sheet_to_json(sheet);
+    const data = parseSheetToRows(sheet);
 
     const insert = db.prepare(
       'INSERT INTO uploads (user_id, filename, row_index, row_data) VALUES (?, ?, ?, ?)'
@@ -165,8 +170,8 @@ router.post('/users/:userId/upload', require('../middleware/upload').single('fil
       rows.forEach((row, idx) => {
         const encryptedRow = {};
         for (const [col, val] of Object.entries(row)) {
-          // Sanitise input (CSV injection check)
-          const cleanVal = String(val).startsWith('=') ? `'${val}` : val;
+          if (/^__EMPTY/i.test(col)) continue;
+          const cleanVal = cleanCellValue(val, false);
           encryptedRow[col] = encrypt(String(cleanVal));
         }
         insert.run(userId, req.file.originalname, idx, JSON.stringify(encryptedRow));
@@ -179,59 +184,6 @@ router.post('/users/:userId/upload', require('../middleware/upload').single('fil
     res.status(500).json({ error: 'Failed to process spreadsheet' });
   }
 });
-
-/**
- * Map variations of headers to internal standards
- */
-const normalizeHeaders = (row) => {
-  const cleaned = {};
-  const mapping = {
-    'Company': ['company'],
-    'Month': ['month'],
-    'Year': ['year'],
-    'Sales & Revenue': ['sales', 'revenue', 'income'],
-    'Capex Investment': ['capax', 'capex', 'capital'],
-    'R&D Expense': ['r&d', 'r & d', 'r& d', 'r& d exp', 'r & d exp', 'research', 'r& d exp.'],
-    'Direct Expense': ['direct exp', 'direct', 'direct exp.'],
-    'Salary / Wages': ['salary', 'wages', 'salary / wages exp.'],
-    'Other Expense': ['other exp', 'other', 'other exp.'],
-    'Profit & Loss': ['profit', 'loss', 'loass', 'p&l', 'p & l'],
-    'Receivable': ['receivable', 'receivable '],
-    'Payable': ['payable', 'payable '],
-    'Bank & Cash': ['bank & cash', 'bank', 'cash fund', 'cash', 'bank & cash fund', 'bank & cash fund '],
-    'Unsecured Loan': ['unsecure', 'unsecured', 'unsecure loan', 'unsecured loan'],
-    'Bank Loan': ['bank loan', 'loan from bank'],
-  };
-
-  const cleanNumber = (val) => {
-    if (typeof val === 'number') return val;
-    if (!val) return 0;
-    let str = String(val).trim();
-    const isNegative = str.startsWith('(') && str.endsWith(')');
-    if (isNegative) str = str.slice(1, -1);
-    const cleanedNum = str.replace(/[,₹\s]/g, '');
-    let num = parseFloat(cleanedNum) || 0;
-    return isNegative ? -num : num;
-  };
-
-  const keys = Object.keys(row);
-  Object.entries(mapping).forEach(([standard, variants]) => {
-    const foundKey = keys.find(k => {
-      const cleanK = k.toLowerCase().trim();
-      return variants.some(v => cleanK === v.toLowerCase() || cleanK.includes(v.toLowerCase()));
-    });
-    if (foundKey !== undefined) {
-      const val = row[foundKey];
-      cleaned[standard] = standard !== 'Month' && standard !== 'Year' && standard !== 'Company'
-        ? cleanNumber(val)
-        : val;
-    }
-  });
-  Object.keys(mapping).forEach(std => {
-    if (cleaned[std] === undefined && row[std] !== undefined) cleaned[std] = row[std];
-  });
-  return cleaned;
-};
 
 /**
  * POST /api/admin/global-sync-sheets
@@ -260,30 +212,8 @@ router.post('/global-sync-sheets', async (req, res, next) => {
     const allSheetData = [];
     workbook.SheetNames.forEach(sheetName => {
       const sheet = workbook.Sheets[sheetName];
-      const rows = xlsx.utils.sheet_to_json(sheet, { header: 1 });
-      if (!rows.length) return;
-
-      let headerRowIndex = -1;
-      for (let i = 0; i < Math.min(rows.length, 10); i++) {
-        const row = rows[i];
-        if (row.some(cell => {
-          const c = String(cell).toLowerCase();
-          return c.includes('month') || c.includes('company');
-        })) {
-          headerRowIndex = i;
-          break;
-        }
-      }
-
-      if (headerRowIndex !== -1) {
-        const rawHeaders = rows[headerRowIndex];
-        const rawDataRows = rows.slice(headerRowIndex + 1);
-        const data = rawDataRows.map(rawRow => {
-          const rowObj = {};
-          rawHeaders.forEach((header, colIdx) => { if (header) rowObj[header] = rawRow[colIdx]; });
-          return normalizeHeaders(rowObj);
-        }).filter(r => r.Company || r.Month || r['Sales & Revenue']);
-        
+      const data = parseSheetToRows(sheet);
+      if (data.length > 0) {
         allSheetData.push({ sheetName, data });
       }
     });
@@ -305,7 +235,8 @@ router.post('/global-sync-sheets', async (req, res, next) => {
         sheetResult.data.forEach((row, idx) => {
           const encryptedRow = {};
           for (const [col, val] of Object.entries(row)) {
-            const cleanVal = String(val).startsWith('=') ? `'${val}` : val;
+            if (/^__EMPTY/i.test(col)) continue;
+            const cleanVal = cleanCellValue(val, false);
             encryptedRow[col] = encrypt(String(cleanVal));
           }
           const rowCompany = row.Company || sheetResult.sheetName;
@@ -358,30 +289,8 @@ router.post('/global-upload', require('../middleware/upload').single('file'), (r
 
       for (const sheetName of sheetNames) {
         const sheet = workbook.Sheets[sheetName];
-        const rows = xlsx.utils.sheet_to_json(sheet, { header: 1 });
-        if (!rows.length) continue;
-
-        let headerRowIndex = -1;
-        for (let i = 0; i < Math.min(rows.length, 10); i++) {
-          const row = rows[i];
-          if (row.some(cell => {
-            const c = String(cell).toLowerCase();
-            return c.includes('month') || c.includes('company');
-          })) {
-            headerRowIndex = i;
-            break;
-          }
-        }
-        if (headerRowIndex === -1) continue;
-
-        const rawHeaders = rows[headerRowIndex];
-        const rawDataRows = rows.slice(headerRowIndex + 1);
-
-        const data = rawDataRows.map(rawRow => {
-          const rowObj = {};
-          rawHeaders.forEach((header, colIdx) => { if (header) rowObj[header] = rawRow[colIdx]; });
-          return normalizeHeaders(rowObj);
-        }).filter(r => r.Company || r.Month || r['Sales & Revenue']);
+        const data = parseSheetToRows(sheet);
+        if (!data.length) continue;
 
         companies.push(sheetName);
         totalRows += data.length;
@@ -393,7 +302,8 @@ router.post('/global-upload', require('../middleware/upload').single('file'), (r
         data.forEach((row, idx) => {
           const encryptedRow = {};
           for (const [col, val] of Object.entries(row)) {
-            const cleanVal = String(val).startsWith('=') ? `'${val}` : val;
+            if (/^__EMPTY/i.test(col)) continue;
+            const cleanVal = cleanCellValue(val, false);
             encryptedRow[col] = encrypt(String(cleanVal));
           }
           insertRow.run(batchId, sheetName, req.file.originalname, idx, JSON.stringify(encryptedRow));

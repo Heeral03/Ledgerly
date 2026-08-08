@@ -62,21 +62,31 @@ router.post('/google-token', async (req, res, next) => {
  * Shared logic: check whitelist, upsert user, issue JWT
  */
 async function upsertAndRespond(email, name, picture, res) {
-  const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+  const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
   const isAdmin = email.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+  // Check if user has pending or existing dashboard invitations
+  const pendingInvites = db.prepare(
+    'SELECT * FROM dashboard_members WHERE email = ? COLLATE NOCASE'
+  ).all(email);
 
   let permission = 'view';
   if (!isAdmin) {
     const entry = db.prepare(
       'SELECT permission FROM whitelist WHERE email = ? COLLATE NOCASE'
     ).get(email);
-    if (!entry) {
+
+    if (entry) {
+      permission = entry.permission;
+    } else if (pendingInvites.length > 0) {
+      // User was invited to a dashboard! Grant access.
+      permission = pendingInvites.some(i => i.role === 'OWNER' || i.role === 'EDITOR') ? 'upload' : 'view';
+    } else {
       return res.status(403).json({
         error: 'not_whitelisted',
-        message: 'Your email is not approved. Please contact your Admin.',
+        message: 'Your email is not approved or invited to any workspace. Please contact an Admin or Workspace Owner.',
       });
     }
-    permission = entry.permission;
   } else {
     permission = 'upload';
   }
@@ -96,6 +106,15 @@ async function upsertAndRespond(email, name, picture, res) {
 
   if (!isAdmin) {
     db.prepare('UPDATE whitelist SET used = 1 WHERE email = ? COLLATE NOCASE').run(email);
+  }
+
+  // Activate pending invitations and link user_id
+  if (pendingInvites.length > 0) {
+    db.prepare(`
+      UPDATE dashboard_members 
+      SET user_id = ?, status = 'ACTIVE' 
+      WHERE email = ? COLLATE NOCASE
+    `).run(user.id, email);
   }
 
   const token = signToken({

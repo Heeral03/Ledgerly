@@ -78,6 +78,30 @@ db.exec(`
     analysis_text TEXT    NOT NULL,
     created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
   );
+
+  -- Dashboards table for Workspace / Spreadsheet ownership
+  CREATE TABLE IF NOT EXISTS dashboards (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT    NOT NULL,
+    owner_id        INTEGER NOT NULL REFERENCES users(id),
+    spreadsheet_url TEXT,
+    selected_tab    TEXT    DEFAULT 'all',
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Dashboard Members table for Server-Side RBAC & Pending Invitations
+  CREATE TABLE IF NOT EXISTS dashboard_members (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    dashboard_id  INTEGER NOT NULL REFERENCES dashboards(id) ON DELETE CASCADE,
+    email         TEXT    NOT NULL COLLATE NOCASE,
+    user_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    role          TEXT    NOT NULL DEFAULT 'VIEWER', -- 'OWNER' | 'EDITOR' | 'VIEWER'
+    status        TEXT    NOT NULL DEFAULT 'PENDING', -- 'PENDING' | 'ACTIVE'
+    invite_token  TEXT    UNIQUE,
+    invited_by    INTEGER REFERENCES users(id),
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(dashboard_id, email)
+  );
 `);
 
 // ── Migrations (if tables already exist) ───────────────────────────
