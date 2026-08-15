@@ -103,12 +103,31 @@ router.post('/sync-google-sheet', async (req, res, next) => {
       headers['Authorization'] = `Bearer ${googleAccessToken}`;
     }
 
-    const response = await axios.get(spreadsheetUrl, { 
-      headers,
-      responseType: 'arraybuffer',
-      timeout: 15000,
-      maxRedirects: 5,
-    });
+    let response;
+    try {
+      response = await axios.get(spreadsheetUrl, { 
+        headers,
+        responseType: 'arraybuffer',
+        timeout: 15000,
+        maxRedirects: 5,
+      });
+    } catch (primaryErr) {
+      // Try fallback to CSV export URL if primary XLSX failed
+      const csvUrl = spreadsheetUrl.includes('/pub?')
+        ? spreadsheetUrl.replace('output=xlsx', 'output=csv')
+        : spreadsheetUrl.replace('format=xlsx', 'format=csv');
+      
+      try {
+        response = await axios.get(csvUrl, {
+          headers,
+          responseType: 'arraybuffer',
+          timeout: 15000,
+          maxRedirects: 5,
+        });
+      } catch (fallbackErr) {
+        throw primaryErr;
+      }
+    }
 
     // Check if response is HTML (login page redirect)
     const textSample = Buffer.from(response.data.slice(0, 100)).toString('utf8');
