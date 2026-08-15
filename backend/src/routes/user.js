@@ -114,7 +114,7 @@ router.post('/sync-google-sheet', async (req, res, next) => {
     const textSample = Buffer.from(response.data.slice(0, 100)).toString('utf8');
     if (textSample.trim().startsWith('<!DOCTYPE html') || textSample.trim().startsWith('<html')) {
       return res.status(400).json({
-        error: 'Google Sheet is not accessible. Please ensure the link is correct and your account has access to it.'
+        error: 'The Google Sheet is private or restricted. Please change sharing to "Anyone with the link can view" or use File > Share > Publish to web.'
       });
     }
 
@@ -150,7 +150,10 @@ router.post('/sync-google-sheet', async (req, res, next) => {
     });
   } catch (err) {
     console.error('Google Sync Error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch or parse Google Sheet. Ensure it is shared correctly or reconnect your account.' });
+    const detail = err.response?.status === 404 
+      ? 'Google Sheet not found. Please check the URL.' 
+      : 'Failed to fetch or parse Google Sheet. Ensure sharing is set to "Anyone with the link can view" or Publish to Web.';
+    res.status(400).json({ error: detail });
   }
 });
 
