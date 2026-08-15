@@ -33,7 +33,8 @@ app.use('/api/admin',      adminRoutes);
 app.use('/api/user',       userRoutes);
 app.use('/api/dashboards', dashboardRoutes);
 
-// ── Health check ────────────────────────────────────────────────────
+// ── Health check & Root ──────────────────────────────────────────────
+app.get('/', (_req, res) => res.json({ status: 'ok', service: 'Ledgerly API Engine', health: '/api/health' }));
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 // ── Global error handler ─────────────────────────────────────────────
