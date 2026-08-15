@@ -103,29 +103,53 @@ router.post('/sync-google-sheet', async (req, res, next) => {
       headers['Authorization'] = `Bearer ${googleAccessToken}`;
     }
 
+    // Extract file ID for Google Drive API export if token exists
+    const fileIdMatch = rawUrl.match(/\/d\/(?:e\/)?([a-zA-Z0-9-_]+)/);
+    const fileId = (fileIdMatch && fileIdMatch[1] !== 'e') ? fileIdMatch[1] : null;
+
     let response;
-    try {
-      response = await axios.get(spreadsheetUrl, { 
-        headers,
-        responseType: 'arraybuffer',
-        timeout: 15000,
-        maxRedirects: 5,
-      });
-    } catch (primaryErr) {
-      // Try fallback to CSV export URL if primary XLSX failed
-      const csvUrl = spreadsheetUrl.includes('/pub?')
-        ? spreadsheetUrl.replace('output=xlsx', 'output=csv')
-        : spreadsheetUrl.replace('format=xlsx', 'format=csv');
-      
+    let fetchSuccess = false;
+
+    // 1. Try Google Drive API v3 Export if access token & fileId exist
+    if (googleAccessToken && fileId && !rawUrl.includes('/d/e/')) {
       try {
-        response = await axios.get(csvUrl, {
+        const driveApiUrl = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`;
+        response = await axios.get(driveApiUrl, {
+          headers: { Authorization: `Bearer ${googleAccessToken}` },
+          responseType: 'arraybuffer',
+          timeout: 15000,
+        });
+        fetchSuccess = true;
+      } catch (driveErr) {
+        console.warn('Google Drive API Export failed, falling back to web export:', driveErr.message);
+      }
+    }
+
+    // 2. Fallback to Web Export URL if Drive API wasn't used or failed
+    if (!fetchSuccess) {
+      try {
+        response = await axios.get(spreadsheetUrl, { 
           headers,
           responseType: 'arraybuffer',
           timeout: 15000,
           maxRedirects: 5,
         });
-      } catch (fallbackErr) {
-        throw primaryErr;
+      } catch (primaryErr) {
+        // Try fallback to CSV export URL if primary XLSX failed
+        const csvUrl = spreadsheetUrl.includes('/pub?')
+          ? spreadsheetUrl.replace('output=xlsx', 'output=csv')
+          : spreadsheetUrl.replace('format=xlsx', 'format=csv');
+        
+        try {
+          response = await axios.get(csvUrl, {
+            headers,
+            responseType: 'arraybuffer',
+            timeout: 15000,
+            maxRedirects: 5,
+          });
+        } catch (fallbackErr) {
+          throw primaryErr;
+        }
       }
     }
 
