@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Users, BarChart2, Settings, LogOut,
   ShieldCheck, UserPlus, Trash2, Eye, CheckCircle, AlertCircle, RefreshCw,
   History, Sparkles, TrendingUp, AlertTriangle, Wallet, Landmark,
-  Filter, X, Play, TrendingDown
+  Filter, X, Play, TrendingDown, Menu,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area,
@@ -373,66 +373,103 @@ export default function AdminDashboard() {
   const totalUploads = users.reduce((s, u) => s + (u.upload_count || 0), 0);
   const anomalies = ceoData?.rows && selectedCompany !== 'PORTFOLIO_OVERVIEW' ? detectAnomalies(ceoData.rows) : [];
 
-  return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-subtle)' }}>
-      {/* Sidebar */}
-      <aside style={{ width: '260px', background: '#fff', borderRight: '1px solid var(--border-subtle)', padding: '32px 20px', display: 'flex', flexDirection: 'column', boxShadow: '2px 0 8px rgba(26,22,20,0.04)', flexShrink: 0 }}>
-        <div style={{ textAlign: 'center', marginBottom: '36px' }}>
-          <div style={{ width: '40px', height: '40px', background: 'var(--primary)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', boxShadow: '0 4px 14px rgba(192,57,43,0.25)' }}>
-            <TrendingUp size={20} color="#fff" />
-          </div>
-          <p style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-dark)', letterSpacing: '-0.3px' }}>Ledgerly</p>
-          <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '2px' }}>Admin Portal</p>
-        </div>
-        {user?.picture && (
-          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-            <img src={user.picture} alt="Avatar" style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px solid var(--primary)', boxShadow: '0 0 10px rgba(192,57,43,0.2)', marginBottom: '8px' }} />
-            <p style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-dark)' }}>{user.name}</p>
-            <p style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '2px' }}>Administrator</p>
-          </div>
-        )}
-        <nav style={{ flex: 1 }}>
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{
-              width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
-              padding: '11px 14px', borderRadius: '10px', marginBottom: '4px',
-              fontSize: '13px', fontWeight: '500', cursor: 'pointer', border: 'none',
-              color: tab === t.id ? 'var(--primary)' : 'var(--text-mid)',
-              background: tab === t.id ? 'rgba(192,57,43,0.07)' : 'transparent',
-              borderLeft: tab === t.id ? '2px solid var(--primary)' : '2px solid transparent',
-              transition: 'all 0.2s ease',
-            }}>{t.icon} {t.label}</button>
-          ))}
-        </nav>
-        <button onClick={handleLogout} className="btn-ghost" style={{ width: '100%', justifyContent: 'center' }}>
-          <LogOut size={16} /> Sign Out
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const sidebarContent = (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ textAlign: 'center', marginBottom: '36px', position: 'relative' }}>
+        <button className="mobile-only" onClick={() => setMobileOpen(false)} style={{ position: 'absolute', top: 0, right: 0, background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
+          <X size={20} />
         </button>
-      </aside>
+        <div style={{ width: '40px', height: '40px', background: 'var(--primary)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px', boxShadow: '0 4px 14px rgba(192,57,43,0.25)' }}>
+          <TrendingUp size={20} color="#fff" />
+        </div>
+        <p style={{ fontSize: '14px', fontWeight: '800', color: 'var(--text-dark)', letterSpacing: '-0.3px' }}>Ledgerly</p>
+        <p style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '2px' }}>Admin Portal</p>
+      </div>
+      {user?.picture && (
+        <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+          <img src={user.picture} alt="Avatar" style={{ width: '48px', height: '48px', borderRadius: '50%', border: '2px solid var(--primary)', boxShadow: '0 0 10px rgba(192,57,43,0.2)', marginBottom: '8px' }} />
+          <p style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-dark)' }}>{user.name}</p>
+          <p style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '2px' }}>Administrator</p>
+        </div>
+      )}
+      <nav style={{ flex: 1 }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => { setTab(t.id); setMobileOpen(false); }} style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: '10px',
+            padding: '11px 14px', borderRadius: '10px', marginBottom: '4px',
+            fontSize: '13px', fontWeight: '500', cursor: 'pointer', border: 'none',
+            color: tab === t.id ? 'var(--primary)' : 'var(--text-mid)',
+            background: tab === t.id ? 'rgba(192,57,43,0.07)' : 'transparent',
+            borderLeft: tab === t.id ? '2px solid var(--primary)' : '2px solid transparent',
+            transition: 'all 0.2s ease',
+          }}>{t.icon} {t.label}</button>
+        ))}
+      </nav>
+      <button onClick={handleLogout} className="btn-ghost" style={{ width: '100%', justifyContent: 'center' }}>
+        <LogOut size={16} /> Sign Out
+      </button>
+    </div>
+  );
 
-      {/* Main */}
-      <main style={{ flex: 1, padding: '40px 48px', overflowY: 'auto' }}>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg-subtle)' }}>
+      {/* Mobile Header Bar */}
+      <div className="mobile-header-bar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={() => setMobileOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--text-dark)' }}>
+            <Menu size={22} />
+          </button>
+          <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--text-dark)' }}>
+            Ledgerly Admin
+          </span>
+        </div>
+        <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--primary)', background: 'rgba(192,57,43,0.08)', padding: '4px 8px', borderRadius: 6 }}>
+          Admin
+        </span>
+      </div>
 
-        {/* ── Overview ────────────────────────────────────────────────── */}
-        {tab === 'overview' && (
+      <div style={{ display: 'flex', flex: 1, minWidth: 0 }}>
+        {/* Desktop Sidebar */}
+        <aside className="desktop-only" style={{ width: '260px', background: '#fff', borderRight: '1px solid var(--border-subtle)', padding: '32px 20px', display: 'flex', flexDirection: 'column', boxShadow: '2px 0 8px rgba(26,22,20,0.04)', flexShrink: 0 }}>
+          {sidebarContent}
+        </aside>
+
+        {/* Mobile Drawer Overlay */}
+        {mobileOpen && (
           <>
-            <header style={{ marginBottom: '40px' }}>
-              <h1 style={{ fontSize: '26px', fontWeight: '700', marginBottom: '6px' }}>Admin Portal</h1>
-              <p className="calligraphy-text" style={{ fontSize: '16px' }}>Welcome back, {user?.name}</p>
-            </header>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '20px', marginBottom: '32px' }}>
-              {[
-                { label: 'Registered Users', value: nonAdminUsers.length },
-                { label: 'Total Uploads', value: totalUploads },
-                { label: 'Whitelisted Emails', value: whitelist.length },
-              ].map((s, i) => (
-                <div key={i} className="premium-card" style={{ padding: '28px', margin: 0, maxWidth: 'none' }}>
-                  <p style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600' }}>{s.label}</p>
-                  <h3 style={{ fontSize: '36px', fontWeight: '700', marginTop: '10px', color: 'var(--primary)' }}>{s.value}</h3>
-                </div>
-              ))}
+            <div className="mobile-drawer-backdrop mobile-only" onClick={() => setMobileOpen(false)} />
+            <div className="mobile-drawer mobile-only" style={{ background: '#fff', padding: '24px 20px' }}>
+              {sidebarContent}
             </div>
           </>
         )}
+
+        {/* Main */}
+        <main style={{ flex: 1, padding: '24px', overflowY: 'auto' }}>
+
+          {/* ── Overview ────────────────────────────────────────────────── */}
+          {tab === 'overview' && (
+            <>
+              <header style={{ marginBottom: '32px' }}>
+                <h1 style={{ fontSize: '24px', fontWeight: '700', marginBottom: '6px' }}>Admin Portal</h1>
+                <p className="calligraphy-text" style={{ fontSize: '15px' }}>Welcome back, {user?.name}</p>
+              </header>
+              <div className="responsive-kpi-grid-3" style={{ marginBottom: '32px' }}>
+                {[
+                  { label: 'Registered Users', value: nonAdminUsers.length },
+                  { label: 'Total Uploads', value: totalUploads },
+                  { label: 'Whitelisted Emails', value: whitelist.length },
+                ].map((s, i) => (
+                  <div key={i} className="premium-card" style={{ padding: '24px', margin: 0, maxWidth: 'none' }}>
+                    <p style={{ fontSize: '11px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600' }}>{s.label}</p>
+                    <h3 style={{ fontSize: '32px', fontWeight: '700', marginTop: '8px', color: 'var(--primary)' }}>{s.value}</h3>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
         {/* ── CEO Dashboard ───────────────────────────────────────────── */}
         {tab === 'ceo' && (
@@ -486,29 +523,31 @@ export default function AdminDashboard() {
                   <h3 style={{ fontSize: '15px', fontWeight: '700' }}>Master Upload History</h3>
                   <button onClick={() => setShowGlobalHistory(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '12px', color: 'var(--primary)' }}>Close</button>
                 </div>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead><tr style={{ background: 'var(--bg-subtle)', borderBottom: '1px solid var(--border-subtle)' }}>
-                    {['Batch ID', 'Filename', 'Uploaded By', 'Date', 'Companies'].map(h => (
-                      <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: 'var(--text-dim)', textTransform: 'uppercase' }}>{h}</th>
-                    ))}
-                  </tr></thead>
-                  <tbody>
-                    {globalHistory.map(h => {
-                      const meta = JSON.parse(h.metadata || '{}');
-                      return (
-                        <tr key={h.id} onClick={() => handleBatchSelect(h.id)} style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', background: selectedBatchId === h.id ? 'rgba(192,57,43,0.04)' : 'transparent' }}>
-                          <td style={{ padding: '12px 16px', fontSize: '13px' }}>#{h.id}</td>
-                          <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: '600' }}>{h.filename}</td>
-                          <td style={{ padding: '12px 16px', fontSize: '13px' }}>{h.uploader_name}</td>
-                          <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-dim)' }}>{new Date(h.uploaded_at).toLocaleString()}</td>
-                          <td style={{ padding: '12px 16px', fontSize: '12px' }}>
-                            {meta.companies?.map(c => <span key={c} style={{ background: 'rgba(192,57,43,0.06)', padding: '2px 8px', borderRadius: '4px', marginRight: '4px', color: 'var(--primary)' }}>{c}</span>)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="table-responsive-wrapper">
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead><tr style={{ background: 'var(--bg-subtle)', borderBottom: '1px solid var(--border-subtle)' }}>
+                      {['Batch ID', 'Filename', 'Uploaded By', 'Date', 'Companies'].map(h => (
+                        <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: '11px', fontWeight: '700', color: 'var(--text-dim)', textTransform: 'uppercase' }}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {globalHistory.map(h => {
+                        const meta = JSON.parse(h.metadata || '{}');
+                        return (
+                          <tr key={h.id} onClick={() => handleBatchSelect(h.id)} style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', background: selectedBatchId === h.id ? 'rgba(192,57,43,0.04)' : 'transparent' }}>
+                            <td style={{ padding: '12px 16px', fontSize: '13px' }}>#{h.id}</td>
+                            <td style={{ padding: '12px 16px', fontSize: '13px', fontWeight: '600' }}>{h.filename}</td>
+                            <td style={{ padding: '12px 16px', fontSize: '13px' }}>{h.uploader_name}</td>
+                            <td style={{ padding: '12px 16px', fontSize: '13px', color: 'var(--text-dim)' }}>{new Date(h.uploaded_at).toLocaleString()}</td>
+                            <td style={{ padding: '12px 16px', fontSize: '12px' }}>
+                              {meta.companies?.map(c => <span key={c} style={{ background: 'rgba(192,57,43,0.06)', padding: '2px 8px', borderRadius: '4px', marginRight: '4px', color: 'var(--primary)' }}>{c}</span>)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
@@ -732,5 +771,6 @@ export default function AdminDashboard() {
         )}
       </main>
     </div>
-  );
+  </div>
+);
 }

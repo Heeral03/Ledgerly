@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, BarChart2, Zap, Sparkles, Link2, Users, Settings, LogOut, Shield, ChevronRight } from 'lucide-react';
+import { Activity, BarChart2, Zap, Sparkles, Link2, Users, Settings, LogOut, Shield, ChevronRight, X } from 'lucide-react';
 
 export default function WorkspaceSidebar({
   activeTab,
@@ -7,7 +7,9 @@ export default function WorkspaceSidebar({
   dashboard,
   userRole,
   user,
-  onLogout
+  onLogout,
+  mobileOpen,
+  setMobileOpen
 }) {
   const menuItems = [
     { id: 'overview', label: 'Dashboard Overview', icon: Activity },
@@ -19,42 +21,43 @@ export default function WorkspaceSidebar({
     { id: 'settings', label: 'Workspace Settings', icon: Settings },
   ];
 
-  return (
-    <aside style={{
-      width: '260px',
-      height: '100vh',
-      position: 'sticky',
-      top: 0,
-      background: '#FFFFFF',
-      borderRight: '1px solid var(--border-subtle)',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-      padding: '24px 16px',
-      boxSizing: 'border-box',
-      zIndex: 50,
-      boxShadow: '2px 0 12px rgba(26, 22, 20, 0.03)',
-    }}>
+  const sidebarContent = (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
       <div>
         {/* Ledgerly Brand Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '28px', padding: '0 8px' }}>
-          <div style={{
-            width: '38px', height: '38px', borderRadius: '10px',
-            background: 'var(--primary)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 800, color: '#FFFFFF', fontSize: '1.2rem',
-            boxShadow: '0 4px 14px rgba(192, 57, 43, 0.25)'
-          }}>
-            L
-          </div>
-          <div>
-            <div style={{ fontWeight: 800, fontSize: '1.2rem', color: 'var(--text-dark)', letterSpacing: '-0.5px' }}>
-              Ledgerly
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px', padding: '0 8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '38px', height: '38px', borderRadius: '10px',
+              background: 'var(--primary)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 800, color: '#FFFFFF', fontSize: '1.2rem',
+              boxShadow: '0 4px 14px rgba(192, 57, 43, 0.25)'
+            }}>
+              L
             </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Shield size={12} style={{ color: 'var(--primary)' }} /> Executive Workspace
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '1.2rem', color: 'var(--text-dark)', letterSpacing: '-0.5px' }}>
+                Ledgerly
+              </div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <Shield size={12} style={{ color: 'var(--primary)' }} /> Executive Workspace
+              </div>
             </div>
           </div>
+
+          {setMobileOpen && (
+            <button
+              onClick={() => setMobileOpen(false)}
+              className="mobile-only"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-dim)', padding: '4px'
+              }}
+            >
+              <X size={20} />
+            </button>
+          )}
         </div>
 
         {/* Workspace Active Card */}
@@ -95,7 +98,10 @@ export default function WorkspaceSidebar({
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveTab(item.id)}
+                onClick={() => {
+                  setActiveTab(item.id);
+                  if (setMobileOpen) setMobileOpen(false);
+                }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -167,6 +173,45 @@ export default function WorkspaceSidebar({
           </button>
         )}
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Sticky Sidebar */}
+      <aside
+        className="desktop-only"
+        style={{
+          width: '260px',
+          height: '100vh',
+          position: 'sticky',
+          top: 0,
+          background: '#FFFFFF',
+          borderRight: '1px solid var(--border-subtle)',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          padding: '24px 16px',
+          boxSizing: 'border-box',
+          zIndex: 50,
+          boxShadow: '2px 0 12px rgba(26, 22, 20, 0.03)',
+        }}
+      >
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Drawer Overlay */}
+      {mobileOpen && (
+        <>
+          <div
+            className="mobile-drawer-backdrop mobile-only"
+            onClick={() => setMobileOpen && setMobileOpen(false)}
+          />
+          <div className="mobile-drawer mobile-only" style={{ padding: '20px 16px' }}>
+            {sidebarContent}
+          </div>
+        </>
+      )}
+    </>
   );
 }
+

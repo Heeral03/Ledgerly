@@ -3,7 +3,7 @@ import {
   TrendingUp, TrendingDown, Activity, Zap, DollarSign, Wallet,
   AlertTriangle, ChevronUp, ChevronDown, Factory, BarChart2,
   LogOut, LayoutDashboard, RefreshCw, Sparkles, Play, Filter,
-  History, Send, MessageCircle, X, CheckCircle, Landmark, ShieldCheck,
+  History, Send, MessageCircle, X, CheckCircle, Landmark, ShieldCheck, Menu,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, Cell,
@@ -128,7 +128,7 @@ function KpiGrid({ rows }) {
   ];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+    <div className="responsive-kpi-grid-3" style={{ marginBottom: 24 }}>
       {cards.slice(0, 6).map((k, i) => (
         <Card key={i} style={{ padding: '20px 22px', position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: k.accent, borderRadius: '16px 16px 0 0' }} />
@@ -176,7 +176,7 @@ function ChartsGrid({ rows, labelCol, insights }) {
   ].filter(d => d.value > 0);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+    <div className="responsive-grid-2col">
 
       {/* Revenue vs Expenses */}
       <Card style={{ padding: 24 }}>
@@ -447,33 +447,35 @@ function Chat({ company, batchId, API }) {
 function PortfolioView({ data, onSelect }) {
   const sorted = [...data].sort((a, b) => b.revenue - a.revenue);
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 20 }}>
+    <div className="responsive-grid-2col">
       <Card style={{ overflow: 'hidden' }}>
         <div style={{ padding: '20px 24px 16px', borderBottom: `1px solid ${C.border}` }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, color: C.dark, margin: 0 }}>Portfolio Performance Ranking</h3>
           <p style={{ fontSize: 11, color: C.dim, marginTop: 3 }}>Click a row to drill into that company</p>
         </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: C.bg }}>
-              {['#', 'Company', 'Revenue', 'Net P&L', 'Cash', 'Expenses'].map(h => (
-                <th key={h} style={{ padding: '11px 16px', textAlign: h === '#' ? 'center' : 'left', fontSize: 10, fontWeight: 700, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.8px' }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((p, i) => (
-              <tr key={i} onClick={() => onSelect(p.companyName)} style={{ borderBottom: `1px solid ${C.border}`, cursor: 'pointer', background: p.pl < 0 ? 'rgba(220,38,38,0.02)' : 'transparent' }}>
-                <td style={{ padding: '14px 16px', textAlign: 'center', color: C.dim, fontWeight: 700, fontSize: 12 }}>{i + 1}</td>
-                <td style={{ padding: '14px 16px', fontWeight: 700, color: p.pl < 0 ? C.red : C.dark, fontSize: 13 }}>{p.companyName}</td>
-                <td style={{ padding: '14px 16px', fontSize: 13 }}>₹{lakh(p.revenue)}L</td>
-                <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 700, color: p.pl >= 0 ? C.green : C.red }}>₹{lakh(p.pl)}L</td>
-                <td style={{ padding: '14px 16px', fontSize: 13 }}>₹{lakh(p.cash)}L</td>
-                <td style={{ padding: '14px 16px', fontSize: 13 }}>₹{lakh(p.expense)}L</td>
+        <div className="table-responsive-wrapper">
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: C.bg }}>
+                {['#', 'Company', 'Revenue', 'Net P&L', 'Cash', 'Expenses'].map(h => (
+                  <th key={h} style={{ padding: '11px 16px', textAlign: h === '#' ? 'center' : 'left', fontSize: 10, fontWeight: 700, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.8px' }}>{h}</th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {sorted.map((p, i) => (
+                <tr key={i} onClick={() => onSelect(p.companyName)} style={{ borderBottom: `1px solid ${C.border}`, cursor: 'pointer', background: p.pl < 0 ? 'rgba(220,38,38,0.02)' : 'transparent' }}>
+                  <td style={{ padding: '14px 16px', textAlign: 'center', color: C.dim, fontWeight: 700, fontSize: 12 }}>{i + 1}</td>
+                  <td style={{ padding: '14px 16px', fontWeight: 700, color: p.pl < 0 ? C.red : C.dark, fontSize: 13 }}>{p.companyName}</td>
+                  <td style={{ padding: '14px 16px', fontSize: 13 }}>₹{lakh(p.revenue)}L</td>
+                  <td style={{ padding: '14px 16px', fontSize: 13, fontWeight: 700, color: p.pl >= 0 ? C.green : C.red }}>₹{lakh(p.pl)}L</td>
+                  <td style={{ padding: '14px 16px', fontSize: 13 }}>₹{lakh(p.cash)}L</td>
+                  <td style={{ padding: '14px 16px', fontSize: 13 }}>₹{lakh(p.expense)}L</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
       <Card style={{ padding: 24 }}>
         <SHead title="Comparative Radar" sub="Revenue · Cash · Expenses" />
@@ -505,6 +507,7 @@ export default function CEODashboard() {
   const [selectedBatchId, setSelectedBatchId] = useState(null);
   const [analysis, setAnalysis] = useState('');
   const [generatingAI, setGeneratingAI] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [globalHistory, setGlobalHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [dismissedAlerts, setDismissedAlerts] = useState(false);
@@ -548,6 +551,7 @@ export default function CEODashboard() {
 
   function switchCompany(name) {
     setSelectedCompany(name); setDismissedAlerts(false); setAnalysis('');
+    setMobileOpen(false);
     if (name === 'PORTFOLIO_OVERVIEW') fetchPortfolio(selectedBatchId);
     else { fetchCeoData(name, selectedBatchId); fetchAnalysis(name, selectedBatchId); }
   }
@@ -579,12 +583,10 @@ export default function CEODashboard() {
     { id: 'ai', label: 'AI Analyst', icon: <Sparkles size={16} /> },
   ];
 
-  return (
-    <div style={{ display: 'flex', minHeight: '100vh', fontFamily: "'Plus Jakarta Sans', sans-serif", background: C.bg }}>
-
-      {/* Sidebar */}
-      <aside style={{ width: 220, flexShrink: 0, background: C.dark, display: 'flex', flexDirection: 'column', padding: '24px 14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 36, padding: '0 6px' }}>
+  const sidebarNavContent = (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 36, padding: '0 6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ width: 34, height: 34, borderRadius: 9, background: C.indigo, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Factory size={18} color="#fff" />
           </div>
@@ -593,49 +595,87 @@ export default function CEODashboard() {
             <p style={{ fontSize: 10, color: C.dim, margin: 0 }}>CFO Dashboard</p>
           </div>
         </div>
-
-        {/* Company selector */}
-        {hasData && (
-          <div style={{ marginBottom: 24 }}>
-            <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.2)', letterSpacing: '1.5px', textTransform: 'uppercase', padding: '0 8px', marginBottom: 8 }}>Companies</p>
-            <button onClick={() => switchCompany('PORTFOLIO_OVERVIEW')} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 9, marginBottom: 3, fontSize: 12, fontWeight: selectedCompany === 'PORTFOLIO_OVERVIEW' ? 700 : 500, cursor: 'pointer', border: 'none', color: selectedCompany === 'PORTFOLIO_OVERVIEW' ? '#fff' : 'rgba(255,255,255,0.4)', background: selectedCompany === 'PORTFOLIO_OVERVIEW' ? 'rgba(255,255,255,0.10)' : 'transparent', borderLeft: selectedCompany === 'PORTFOLIO_OVERVIEW' ? `3px solid ${C.indigo}` : '3px solid transparent', transition: 'all 0.2s' }}>
-              <ShieldCheck size={14} /> Portfolio View
-            </button>
-            {ceoData?.availableCompanies?.map(c => (
-              <button key={c} onClick={() => switchCompany(c)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 9, marginBottom: 3, fontSize: 12, fontWeight: selectedCompany === c ? 700 : 500, cursor: 'pointer', border: 'none', color: selectedCompany === c ? '#fff' : 'rgba(255,255,255,0.4)', background: selectedCompany === c ? 'rgba(255,255,255,0.10)' : 'transparent', borderLeft: selectedCompany === c ? `3px solid ${C.indigo}` : '3px solid transparent', transition: 'all 0.2s', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                <Factory size={14} style={{ flexShrink: 0 }} /> {c}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Section tabs */}
-        {selectedCompany && selectedCompany !== 'PORTFOLIO_OVERVIEW' && (
-          <div style={{ marginBottom: 24 }}>
-            <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.2)', letterSpacing: '1.5px', textTransform: 'uppercase', padding: '0 8px', marginBottom: 8 }}>View</p>
-            {TABS.map(t => (
-              <button key={t.id} onClick={() => setActiveTab(t.id)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 9, marginBottom: 3, fontSize: 12, fontWeight: activeTab === t.id ? 700 : 500, cursor: 'pointer', border: 'none', color: activeTab === t.id ? '#fff' : 'rgba(255,255,255,0.4)', background: activeTab === t.id ? 'rgba(255,255,255,0.08)' : 'transparent', borderLeft: activeTab === t.id ? `3px solid ${C.indigo}` : '3px solid transparent', transition: 'all 0.2s' }}>
-                {t.icon} {t.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div style={{ flex: 1 }} />
-
-        {user?.picture && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, padding: '0 4px' }}>
-            <img src={user.picture} alt="" style={{ width: 32, height: 32, borderRadius: '50%', border: `2px solid ${C.indigo}` }} />
-            <div style={{ minWidth: 0 }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</p>
-              <p style={{ fontSize: 9, color: C.dim, margin: 0 }}>CFO</p>
-            </div>
-          </div>
-        )}
-        <button onClick={handleLogout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 9, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: 'none', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)', transition: 'all 0.2s' }}>
-          <LogOut size={14} /> Sign Out
+        <button className="mobile-only" onClick={() => setMobileOpen(false)} style={{ background: 'none', border: 'none', color: C.dim, cursor: 'pointer' }}>
+          <X size={20} />
         </button>
-      </aside>
+      </div>
+
+      {/* Company selector */}
+      {hasData && (
+        <div style={{ marginBottom: 24 }}>
+          <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.2)', letterSpacing: '1.5px', textTransform: 'uppercase', padding: '0 8px', marginBottom: 8 }}>Companies</p>
+          <button onClick={() => switchCompany('PORTFOLIO_OVERVIEW')} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 9, marginBottom: 3, fontSize: 12, fontWeight: selectedCompany === 'PORTFOLIO_OVERVIEW' ? 700 : 500, cursor: 'pointer', border: 'none', color: selectedCompany === 'PORTFOLIO_OVERVIEW' ? '#fff' : 'rgba(255,255,255,0.4)', background: selectedCompany === 'PORTFOLIO_OVERVIEW' ? 'rgba(255,255,255,0.10)' : 'transparent', borderLeft: selectedCompany === 'PORTFOLIO_OVERVIEW' ? `3px solid ${C.indigo}` : '3px solid transparent', transition: 'all 0.2s' }}>
+            <ShieldCheck size={14} /> Portfolio View
+          </button>
+          {ceoData?.availableCompanies?.map(c => (
+            <button key={c} onClick={() => switchCompany(c)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 9, marginBottom: 3, fontSize: 12, fontWeight: selectedCompany === c ? 700 : 500, cursor: 'pointer', border: 'none', color: selectedCompany === c ? '#fff' : 'rgba(255,255,255,0.4)', background: selectedCompany === c ? 'rgba(255,255,255,0.10)' : 'transparent', borderLeft: selectedCompany === c ? `3px solid ${C.indigo}` : '3px solid transparent', transition: 'all 0.2s', textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <Factory size={14} style={{ flexShrink: 0 }} /> {c}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Section tabs */}
+      {selectedCompany && selectedCompany !== 'PORTFOLIO_OVERVIEW' && (
+        <div style={{ marginBottom: 24 }}>
+          <p style={{ fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.2)', letterSpacing: '1.5px', textTransform: 'uppercase', padding: '0 8px', marginBottom: 8 }}>View</p>
+          {TABS.map(t => (
+            <button key={t.id} onClick={() => { setActiveTab(t.id); setMobileOpen(false); }} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 9, marginBottom: 3, fontSize: 12, fontWeight: activeTab === t.id ? 700 : 500, cursor: 'pointer', border: 'none', color: activeTab === t.id ? '#fff' : 'rgba(255,255,255,0.4)', background: activeTab === t.id ? 'rgba(255,255,255,0.08)' : 'transparent', borderLeft: activeTab === t.id ? `3px solid ${C.indigo}` : '3px solid transparent', transition: 'all 0.2s' }}>
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div style={{ flex: 1 }} />
+
+      {user?.picture && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, padding: '0 4px' }}>
+          <img src={user.picture} alt="" style={{ width: 32, height: 32, borderRadius: '50%', border: `2px solid ${C.indigo}` }} />
+          <div style={{ minWidth: 0 }}>
+            <p style={{ fontSize: 11, fontWeight: 700, color: '#fff', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</p>
+            <p style={{ fontSize: 9, color: C.dim, margin: 0 }}>CFO</p>
+          </div>
+        </div>
+      )}
+      <button onClick={handleLogout} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 10px', borderRadius: 9, fontSize: 12, fontWeight: 500, cursor: 'pointer', border: 'none', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.35)', transition: 'all 0.2s' }}>
+        <LogOut size={14} /> Sign Out
+      </button>
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', fontFamily: "'Plus Jakarta Sans', sans-serif", background: C.bg }}>
+      {/* Mobile Top Header */}
+      <div className="mobile-header-bar">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={() => setMobileOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: C.dark }}>
+            <Menu size={22} />
+          </button>
+          <span style={{ fontWeight: 800, fontSize: 14, color: C.dark }}>
+            {selectedCompany === 'PORTFOLIO_OVERVIEW' ? 'Portfolio' : selectedCompany || 'CEO Dashboard'}
+          </span>
+        </div>
+        <span style={{ fontSize: 10, fontWeight: 700, color: C.indigo, background: C.indigoBg, padding: '4px 8px', borderRadius: 6 }}>
+          CFO Suite
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', flex: 1, minWidth: 0 }}>
+        {/* Desktop Sidebar */}
+        <aside className="desktop-only" style={{ width: 220, flexShrink: 0, background: C.dark, display: 'flex', flexDirection: 'column', padding: '24px 14px' }}>
+          {sidebarNavContent}
+        </aside>
+
+        {/* Mobile Drawer Overlay */}
+        {mobileOpen && (
+          <>
+            <div className="mobile-drawer-backdrop mobile-only" onClick={() => setMobileOpen(false)} />
+            <div className="mobile-drawer mobile-only" style={{ background: C.dark, padding: '20px 14px' }}>
+              {sidebarNavContent}
+            </div>
+          </>
+        )}
 
       {/* Main */}
       <main style={{ flex: 1, overflowY: 'auto', padding: '32px 40px' }}>
@@ -757,5 +797,6 @@ export default function CEODashboard() {
         )}
       </main>
     </div>
-  );
+  </div>
+);
 }

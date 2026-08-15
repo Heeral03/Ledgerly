@@ -3,7 +3,7 @@ import {
   TrendingUp, TrendingDown, LogOut, BarChart2, Sparkles,
   RefreshCw, AlertTriangle, Send, MessageCircle, X, CheckCircle,
   Settings, Zap, Activity, Database, ChevronUp, ChevronDown, Plus,
-  BarChart3, LineChartIcon, AreaChartIcon,
+  BarChart3, LineChartIcon, AreaChartIcon, Menu,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area,
@@ -379,6 +379,7 @@ export default function UserDashboard() {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState(null);
   const [countdown, setCountdown] = useState(30);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const syncIntervalRef = useRef(null);
   const countdownRef = useRef(null);
   const connectedSheet = JSON.parse(localStorage.getItem('connected_sheet') || '{}');
@@ -529,7 +530,7 @@ export default function UserDashboard() {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-subtle)', display: 'flex', color: 'var(--text-dark)' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-subtle)', display: 'flex', color: 'var(--text-dark)', flexDirection: 'row' }}>
       {/* ── Left Sidebar Menu ────────────────────────────────────────── */}
       <WorkspaceSidebar
         activeTab={activeTab}
@@ -538,6 +539,8 @@ export default function UserDashboard() {
         userRole={userRole}
         user={user}
         onLogout={handleLogout}
+        mobileOpen={mobileOpen}
+        setMobileOpen={setMobileOpen}
       />
 
       {/* ── Right Content Area ───────────────────────────────────────── */}
@@ -546,11 +549,22 @@ export default function UserDashboard() {
         <header style={{
           background: '#FFFFFF',
           borderBottom: '1px solid var(--border-subtle)',
-          padding: '0 32px', height: '64px', display: 'flex', alignItems: 'center',
-          justifyContent: 'space-between', sticky: 'top', zIndex: 40,
-          boxShadow: '0 1px 4px rgba(26,22,20,0.04)',
+          padding: '12px 24px', minHeight: '64px', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 40,
+          boxShadow: '0 1px 4px rgba(26,22,20,0.04)', flexWrap: 'wrap', gap: '12px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              onClick={() => setMobileOpen(true)}
+              className="mobile-only"
+              style={{
+                background: 'var(--bg-subtle)', border: '1px solid var(--border-subtle)',
+                borderRadius: '8px', padding: '8px', cursor: 'pointer', color: 'var(--text-dark)'
+              }}
+              title="Toggle Menu"
+            >
+              <Menu size={20} />
+            </button>
             <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--text-dark)', letterSpacing: '-0.5px' }}>
               {activeTab === 'overview' && '📊 Executive Dashboard'}
               {activeTab === 'charts' && '📈 Financial Charts & Trends'}
@@ -567,7 +581,7 @@ export default function UserDashboard() {
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <SyncIndicator countdown={countdown} syncing={syncing} onSync={handleManualSync} />
             {userRole === 'OWNER' || userRole === 'EDITOR' ? (
               <button
@@ -575,11 +589,11 @@ export default function UserDashboard() {
                 className="btn-ghost"
                 style={{ padding: '6px 14px', fontSize: '0.8rem' }}
               >
-                <Settings size={14} /> Connect / Change Sheet
+                <Settings size={14} /> Connect Sheet
               </button>
             ) : (
               <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>
-                👁️ Viewer Mode (Read-Only)
+                👁️ Viewer Mode
               </span>
             )}
           </div>
@@ -718,7 +732,7 @@ export default function UserDashboard() {
                     <Settings size={13} /> Customize
                   </button>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(displayKpis.length, 5)}, 1fr)`, gap: '16px' }}>
+                <div className="responsive-kpi-grid-5">
                   {displayKpis.map(kpi => (
                     <KpiCard key={kpi.key} kpi={kpi} pinned={pinnedKpis.includes(kpi.key)} onTogglePin={togglePin} />
                   ))}
@@ -727,7 +741,7 @@ export default function UserDashboard() {
             )}
 
             {/* Row data summary */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px' }}>
+            <div className="responsive-grid-summary">
               <div className="premium-card" style={{ margin: 0, maxWidth: 'none', padding: '24px' }}>
                 <h3 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '16px' }}>Dataset Summary</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -764,7 +778,7 @@ export default function UserDashboard() {
               {chartData.numericCols?.length > 0 && (
                 <div className="premium-card" style={{ margin: 0, maxWidth: 'none', padding: '24px' }}>
                   <h3 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '16px' }}>Quick Trends</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div className="responsive-grid-2col">
                     {chartData.numericCols.slice(0, 4).map((col, i) => {
                       const vals = chartData.rows.map(r => ({ i, v: n(r[col]) }));
                       const latest = n(chartData.rows[chartData.rows.length - 1]?.[col]);
@@ -806,7 +820,7 @@ export default function UserDashboard() {
 
             {/* Additional breakdown charts */}
             {chartData.numericCols?.length >= 2 && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div className="responsive-grid-2col">
                 {/* Top values bar */}
                 <div className="premium-card" style={{ margin: 0, maxWidth: 'none', padding: '24px' }}>
                   <h3 style={{ fontSize: '14px', fontWeight: '700', marginBottom: '16px' }}>Column Totals</h3>

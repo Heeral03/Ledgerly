@@ -148,7 +148,7 @@ export default function TeamManagement({ dashboardId, userRole, token }) {
                 style={{ paddingLeft: '42px' }}
               />
             </div>
-            <div style={{ flex: '0 0 180px' }}>
+            <div style={{ flex: '1 1 180px' }}>
               <select
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value)}
@@ -202,7 +202,7 @@ export default function TeamManagement({ dashboardId, userRole, token }) {
         ) : members.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-dim)' }}>No members found.</div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <div className="table-responsive-wrapper">
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
               <thead>
                 <tr style={{ background: 'var(--bg-subtle)', color: 'var(--text-dim)', borderBottom: '1px solid var(--border-subtle)' }}>
