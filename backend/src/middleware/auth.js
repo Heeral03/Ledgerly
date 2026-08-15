@@ -4,7 +4,7 @@ const SECRET = process.env.JWT_SECRET || 'dev_secret_replace_in_production';
 
 /**
  * Verify a JWT from the Authorization header.
- * Attaches req.user = { id, email, role } on success.
+ * Attaches req.user from DB on success.
  */
 function authenticate(req, res, next) {
   const header = req.headers.authorization;
@@ -13,7 +13,16 @@ function authenticate(req, res, next) {
   }
   const token = header.slice(7);
   try {
-    req.user = jwt.verify(token, SECRET);
+    const decoded = jwt.verify(token, SECRET);
+    const db = require('../db/database');
+    let dbUser = db.prepare('SELECT id, email, name, picture, role, status, permission FROM users WHERE id = ?').get(decoded.id);
+    if (!dbUser && decoded.email) {
+      dbUser = db.prepare('SELECT id, email, name, picture, role, status, permission FROM users WHERE email = ? COLLATE NOCASE').get(decoded.email);
+    }
+    if (!dbUser) {
+      return res.status(401).json({ error: 'User session no longer valid. Please sign in again.' });
+    }
+    req.user = dbUser;
     next();
   } catch {
     return res.status(401).json({ error: 'Token expired or invalid' });
