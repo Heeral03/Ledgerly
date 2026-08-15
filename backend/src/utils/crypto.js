@@ -1,9 +1,9 @@
 const crypto = require('crypto');
 
 const ALGO = 'aes-256-gcm';
-// Key must be 32 bytes (64 hex chars). Pad short keys for dev safety.
+// Guarantee a 32-byte key for AES-256 using SHA-256 hash of ENCRYPTION_KEY string
 const rawKey = process.env.ENCRYPTION_KEY || 'dev_key_replace_in_production_00000000000000000000000000000000';
-const KEY = Buffer.from(rawKey.padEnd(64, '0').slice(0, 64), 'hex');
+const KEY = crypto.createHash('sha256').update(rawKey).digest();
 
 /**
  * Encrypt a plain-text string.
