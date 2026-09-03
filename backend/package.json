@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
+    "test": "node tests/multitenant_sde.test.js",
     "build": "npm install"
   },
   "engines": {

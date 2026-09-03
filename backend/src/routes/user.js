@@ -8,6 +8,7 @@ const { formatRowLabel } = require('../utils/formatters');
 const { getGoogleSheetsExportUrl, isValidGoogleSheetsUrl } = require('../utils/googleSheets');
 const { parseSheetToRows, cleanCellValue } = require('../utils/sheetParser');
 const upload = require('../middleware/upload');
+const cache = require('../utils/cache');
 
 const router = express.Router();
 
@@ -19,6 +20,9 @@ router.use(authenticate);
  */
 function processAndStoreRows(userId, filename, jsonRows, append = false) {
   if (!jsonRows || !jsonRows.length) return 0;
+
+  // Invalidate cache for this user
+  cache.invalidateTag(`user:${userId}`);
 
   if (!append) {
     db.prepare('DELETE FROM uploads WHERE user_id = ?').run(userId);
@@ -205,6 +209,10 @@ router.post('/sync-google-sheet', async (req, res, next) => {
  * Auto-detects 3-5 meaningful KPIs from the user's stored data.
  */
 router.get('/auto-kpis', (req, res) => {
+  const cacheKey = `kpis:${req.user.id}`;
+  const cached = cache.get('user_kpis', cacheKey);
+  if (cached) return res.json(cached);
+
   const rows = db.prepare(
     'SELECT row_data FROM uploads WHERE user_id = ? ORDER BY row_index ASC'
   ).all(req.user.id);
@@ -255,7 +263,9 @@ router.get('/auto-kpis', (req, res) => {
     unit: 'raw',
   }));
 
-  res.json({ kpis, totalRows: decryptedRows.length, columns: numericCols });
+  const result = { kpis, totalRows: decryptedRows.length, columns: numericCols };
+  cache.set('user_kpis', cacheKey, result, [`user:${req.user.id}`]);
+  res.json(result);
 });
 
 /**
@@ -288,6 +298,10 @@ router.get('/data', (req, res) => {
  * Frontend renders Recharts from this.
  */
 router.get('/charts', (req, res) => {
+  const cacheKey = `charts:${req.user.id}`;
+  const cached = cache.get('user_charts', cacheKey);
+  if (cached) return res.json(cached);
+
   const rows = db.prepare(
     'SELECT row_data FROM uploads WHERE user_id = ? ORDER BY row_index ASC'
   ).all(req.user.id);
@@ -316,7 +330,9 @@ router.get('/charts', (req, res) => {
     ['month', 'year', 'period'].includes(col.toLowerCase())
   ) || columns.find(col => !numericCols.includes(col));
 
-  res.json({ columns, rows: decryptedRows, numericCols, labelCol });
+  const result = { columns, rows: decryptedRows, numericCols, labelCol };
+  cache.set('user_charts', cacheKey, result, [`user:${req.user.id}`]);
+  res.json(result);
 });
 
 /**
@@ -326,7 +342,10 @@ router.get('/charts', (req, res) => {
  */
 router.get('/ceo-charts', (req, res) => {
   const { company, batchId } = req.query;
-  
+  const cacheKey = `ceo_charts:${company || 'all'}:${batchId || 'latest'}`;
+  const cached = cache.get('ceo_charts', cacheKey);
+  if (cached) return res.json(cached);
+
   let rows;
   let defaultCompany = company;
 
@@ -378,10 +397,14 @@ router.get('/ceo-charts', (req, res) => {
   const labelCol = '_label'; // Use our unified label column
 
   // Get list of available companies for the selector
-  const batchToUse = batchId || db.prepare('SELECT MAX(id) as id FROM global_upload_history').get().id;
-  const companies = db.prepare('SELECT DISTINCT company_name FROM global_uploads WHERE batch_id = ?').all(batchToUse).map(c => c.company_name);
+  const batchToUse = batchId || db.prepare('SELECT MAX(id) as id FROM global_upload_history').get()?.id;
+  const companies = batchToUse ? db.prepare('SELECT DISTINCT company_name FROM global_uploads WHERE batch_id = ?').all(batchToUse).map(c => c.company_name) : [];
 
-  res.json({ columns, rows: decryptedRows, numericCols, labelCol, availableCompanies: companies, selectedBatchId: batchToUse });
+  const result = { columns, rows: decryptedRows, numericCols, labelCol, availableCompanies: companies, selectedBatchId: batchToUse };
+  if (batchToUse) {
+    cache.set('ceo_charts', cacheKey, result, [`batch:${batchToUse}`]);
+  }
+  res.json(result);
 });
 
 /**
@@ -411,6 +434,10 @@ router.get('/ceo-analysis', (req, res) => {
  */
 router.get('/portfolio', (req, res) => {
   const { batchId } = req.query;
+  const cacheKey = `portfolio:${batchId || 'latest'}`;
+  const cached = cache.get('portfolio', cacheKey);
+  if (cached) return res.json(cached);
+
   const batchToUse = batchId || db.prepare('SELECT MAX(id) as id FROM global_upload_history').get()?.id;
 
   if (!batchToUse) return res.json({ portfolio: [] });
@@ -448,7 +475,9 @@ router.get('/portfolio', (req, res) => {
     };
   });
 
-  res.json({ portfolio, selectedBatchId: batchToUse });
+  const result = { portfolio, selectedBatchId: batchToUse };
+  cache.set('portfolio', cacheKey, result, [`batch:${batchToUse}`]);
+  res.json(result);
 });
 
 /**

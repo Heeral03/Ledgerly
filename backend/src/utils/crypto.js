@@ -36,4 +36,17 @@ function decrypt(ciphertext) {
   }
 }
 
-module.exports = { encrypt, decrypt };
+function encryptCell(plaintext) {
+  const result = encrypt(plaintext);
+  if (!result) return { encryptedText: '', iv: '', authTag: '' };
+  const [iv, authTag, encryptedText] = result.split(':');
+  return { encryptedText, iv, authTag };
+}
+
+function decryptCell(encryptedText, iv, authTag) {
+  const combined = [iv, authTag, encryptedText].join(':');
+  return decrypt(combined);
+}
+
+module.exports = { encrypt, decrypt, encryptCell, decryptCell };
+

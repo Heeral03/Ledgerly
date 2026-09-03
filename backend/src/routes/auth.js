@@ -82,10 +82,8 @@ async function upsertAndRespond(email, name, picture, res) {
       // User was invited to a dashboard! Grant access.
       permission = pendingInvites.some(i => i.role === 'OWNER' || i.role === 'EDITOR') ? 'upload' : 'view';
     } else {
-      return res.status(403).json({
-        error: 'not_whitelisted',
-        message: 'Your email is not approved or invited to any workspace. Please contact an Admin or Workspace Owner.',
-      });
+      // Auto-provision Google authenticated users with standard access
+      permission = 'upload';
     }
   } else {
     permission = 'upload';

@@ -24,7 +24,8 @@ function authenticate(req, res, next) {
     }
     req.user = dbUser;
     next();
-  } catch {
+  } catch (err) {
+    console.error('JWT Auth Error:', err.message);
     return res.status(401).json({ error: 'Token expired or invalid' });
   }
 }

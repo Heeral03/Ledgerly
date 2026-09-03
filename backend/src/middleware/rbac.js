@@ -90,8 +90,85 @@ function requireRole(role) {
   };
 }
 
+/**
+ * Middleware factory to enforce Server-Side RBAC on workspaces.
+ * Scopes authorization by workspace_id and prevents mass-assignment role injection.
+ * @param {string} minimumRole - 'OWNER', 'EDITOR', or 'VIEWER'
+ */
+function requireWorkspaceRole(minimumRole = 'VIEWER') {
+  return (req, res, next) => {
+    try {
+      const workspaceId = req.params.workspaceId || req.params.id || req.headers['x-workspace-id'] || req.query.workspaceId;
+      
+      if (!workspaceId) {
+        return res.status(400).json({ error: 'Workspace ID is required' });
+      }
+
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      // 1. Sanitize request body to prevent mass-assignment role injection attacks
+      if (req.body && typeof req.body === 'object') {
+        if ('role' in req.body && req.body.role === 'OWNER' && req.userRole !== 'OWNER') {
+          delete req.body.role; // Prevent unauthorized user from injecting role: "OWNER"
+        }
+        if ('workspaceId' in req.body && req.body.workspaceId !== workspaceId) {
+          delete req.body.workspaceId; // Prevent cross-workspace injection
+        }
+      }
+
+      // 2. Fetch workspace and verify owner or membership
+      const workspace = db.prepare('SELECT * FROM workspaces WHERE id = ?').get(workspaceId);
+      if (!workspace) {
+        return res.status(404).json({ error: 'Workspace not found' });
+      }
+
+      let userRole = null;
+
+      if (workspace.owner_id === req.user.id) {
+        userRole = 'OWNER';
+      } else {
+        const member = db.prepare(`
+          SELECT role, status FROM workspace_members 
+          WHERE workspace_id = ? AND (user_id = ? OR email = ? COLLATE NOCASE)
+        `).get(workspaceId, req.user.id, req.user.email);
+
+        if (member && member.status === 'ACTIVE') {
+          userRole = member.role.toUpperCase();
+        }
+      }
+
+      if (!userRole) {
+        return res.status(403).json({ error: 'Access denied. You are not a member of this workspace.' });
+      }
+
+      const requiredLevel = ROLE_LEVELS[minimumRole.toUpperCase()] || 1;
+      const userLevel = ROLE_LEVELS[userRole] || 0;
+
+      if (userLevel < requiredLevel) {
+        return res.status(403).json({
+          error: `Permission denied. Requires '${minimumRole}' role or higher. Your role is '${userRole}'.`,
+          userRole,
+          requiredRole: minimumRole,
+        });
+      }
+
+      req.workspace = workspace;
+      req.workspaceRole = userRole;
+
+      next();
+    } catch (err) {
+      console.error('Workspace RBAC Error:', err);
+      return res.status(500).json({ error: 'Internal server error validating workspace authorization.' });
+    }
+  };
+}
+
 module.exports = {
   checkDashboardAccess,
+  requireWorkspaceRole,
   requireRole,
   ROLE_LEVELS,
 };
+
