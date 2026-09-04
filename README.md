@@ -45,6 +45,28 @@ Built with a **Staging $\rightarrow$ Accounting Validation $\rightarrow$ Immutab
 
 ---
 
+## 🗺️ Product Strategy & Enterprise Roadmap
+
+Ledgerly is engineered with a phased product strategy that balances immediate production-ready reliability with a long-term enterprise distribution moat:
+
+### 🚀 Phase 1 — Core Production Pipeline (Current MVP)
+* **Auth & Multi-Tenant RBAC**: Scoped workspace access (`OWNER`, `EDITOR`, `VIEWER`).
+* **Ingestion & Fuzzy Normalization**: Automatic header detection and dictionary variant mapping.
+* **Staging & Validation Area**: Invariant balance checks ($\sum \text{Debits} = \sum \text{Credits}$) and statistical anomaly warnings.
+* **Idempotent Merge Engine**: SHA-256 idempotency key deduplication.
+* **Executive Dashboards**: Deterministic metrics engine for Revenue, Expenses, Net Profit, MoM Growth, and Cash Runway.
+
+### 🤖 Phase 2 — AI-Powered Intelligence (Post-MVP Enhancements)
+* **LLM Header-Mapping Fallback**: AI fallback for edge-case unmapped column headers when dictionary matching confidence is below threshold.
+* **Automated Anomaly Explanations**: Natural-language breakdown of flagged financial spikes (>3x variance).
+* **Financial Tool-Calling Query Agent**: Conversational agent allowing CFOs to query ledger records using structured SQL tool calls.
+
+### 🏛️ Phase 3 — Enterprise Distribution Moat (Live Integration Pipeline)
+* **Direct Financial API Connectors**: Native integrations with **QuickBooks Online API**, **Xero API**, and **Plaid** for automated live bank and ledger feeds.
+* **Universal File Fallback**: Spreadsheet upload serves as an instant fallback for legacy accounting software or bespoke enterprise setups.
+
+---
+
 ## 🔥 Key Technical Highlights & Engineering Design
 
 ### 1. Smart Ingestion & Fuzzy Header Normalization (`sheetParser.js`)
