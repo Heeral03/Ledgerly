@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router({ mergeParams: true });
 const multer = require('multer');
-const { verifyToken } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth');
 const { requireWorkspaceRole } = require('../middleware/rbac');
 const { parseSheetToRows } = require('../utils/sheetParser');
 const { stageImportBatch, commitStagedBatch } = require('../services/stagingEngine');
@@ -16,7 +16,7 @@ const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } }); // 10MB limit
  */
 router.post(
   '/stage',
-  verifyToken,
+  authenticate,
   requireWorkspaceRole('EDITOR'),
   upload.single('file'),
   async (req, res) => {
@@ -64,7 +64,7 @@ router.post(
  */
 router.post(
   '/:batchId/commit',
-  verifyToken,
+  authenticate,
   requireWorkspaceRole('EDITOR'),
   async (req, res) => {
     try {
