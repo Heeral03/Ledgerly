@@ -238,6 +238,28 @@ db.exec(`
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  -- Google Sheets Ingestion & Background Sync Tracker
+  CREATE TABLE IF NOT EXISTS connected_sheets (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id     TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    google_sheet_id  TEXT NOT NULL,
+    sheet_name       TEXT NOT NULL,
+    connected_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    sync_frequency   TEXT NOT NULL DEFAULT 'DAILY', -- 'MANUAL' | 'DAILY' | 'HOURLY'
+    last_synced_at   TEXT,
+    last_sync_status TEXT, -- 'SUCCESS' | 'FAILED' | 'RATE_LIMITED'
+    created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS sync_jobs (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    connected_sheet_id INTEGER NOT NULL REFERENCES connected_sheets(id) ON DELETE CASCADE,
+    status             TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED'
+    error_message      TEXT,
+    started_at         TEXT,
+    finished_at        TEXT
+  );
+
   -- ── Production Performance & Isolation Indexes ────────────────────
   CREATE INDEX IF NOT EXISTS idx_uploads_user_id ON uploads(user_id);
   CREATE INDEX IF NOT EXISTS idx_global_uploads_batch_comp ON global_uploads(batch_id, company_name);

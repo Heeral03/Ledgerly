@@ -1,4 +1,4 @@
-# 🏛️ Ledgerly — Multi-Tenant Financial Analytics & Ingestion Platform
+# 🏛️ Ledgerly — Multi-Tenant Financial Reporting & Ingestion Platform
 
 [![Node.js](https://img.shields.io/badge/Node.js-v22.x-brightgreen.svg)](https://nodejs.org/)
 [![Express](https://img.shields.io/badge/Express-v4.18-blue.svg)](https://expressjs.com/)
@@ -6,117 +6,68 @@
 [![React](https://img.shields.io/badge/Frontend-React_19-61dafb.svg)](https://react.dev/)
 [![Tests](https://img.shields.io/badge/Tests-8%2F8_Passed-success.svg)](./backend/tests/multitenant_sde.test.js)
 
-Ledgerly is an **enterprise multi-tenant financial reporting and data ingestion platform** designed to transform fragmented, unformatted client spreadsheets (Excel `.xlsx`, `.csv`, Google Sheets) into verified, interactive executive dashboards for CEOs, CFOs, and financial advisors.
-
-Built with a **Staging $\rightarrow$ Accounting Validation $\rightarrow$ Immutable Ledger Pipeline**, Ledgerly eliminates manual data cleanup errors, enforces accounting balance invariants, prevents duplicate file uploads with SHA-256 idempotency, and delivers sub-25ms P95 query latencies.
+**One sentence:** Connect your Google account, point Ledgerly at your spreadsheets, get a CEO-readable financial dashboard, and share it securely with colleagues without passing files around.
 
 ---
 
-## 📐 System Architecture Blueprint
+## 🎯 Product Vision & Core Flow
+
+ Ledgerly solves a real problem for founders, CEOs, and ops teams who manage financials in Google Sheets: raw rows are hard to read quickly, and passing files around leads to version confusion. Ledgerly provides a fast, visual dashboard with scoped workspace permissions (OWNER, EDITOR, VIEWER).
 
 ```text
-┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                   CLIENT LAYER (React 19 + Recharts)                              │
-└────────────────────────────────────────────────┬─────────────────────────────────────────────────┘
-                                                 │ HTTPS / REST API
-                                                 ▼
-┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                   EXPRESS.JS BACKEND SERVICE                                      │
-│                                                                                                  │
-│   ┌────────────────────────┐    ┌────────────────────────┐    ┌──────────────────────────────┐   │
-│   │ JWT & RBAC Auth        │ ──>│ Idempotency Engine     │ ──>│ Sheet Parser & Normalizer    │   │
-│   │ (OWNER, EDITOR, VIEWER)│    │ SHA-256(file+tenant)   │    │ (Fuzzy Match & Sanitizer)    │   │
-│   └────────────────────────┘    └────────────────────────┘    └──────────────┬───────────────┘   │
-│                                                                              │                   │
-│                                                                              ▼                   │
-│   ┌────────────────────────┐    ┌────────────────────────┐    ┌──────────────────────────────┐   │
-│   │ Inverted LRU Response  │ <──│ Transactional Ledger   │ <──│ Accounting Rule Validator    │   │
-│   │ Cache (Tag Invalidated)│    │ Commit (`BEGIN...COMMIT│    │ (Balance Invariants & Spikes)│   │
-│   └────────────────────────┘    └────────────────────────┘    └──────────────────────────────┘   │
-└────────────────────────────────────────────────┬─────────────────────────────────────────────────┘
-                                                 │ SQLite WAL Driver (better-sqlite3)
-                                                 ▼
-┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                   PERSISTENCE LAYER (SQLite3 WAL)                                │
-│  - `workspaces`          - `import_batches`        - `ledger_records` (Indexed Aggregations)    │
-│  - `workspace_members`   - `staging_rows`          - `audit_events`   (Transaction Outbox)    │
-└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+Google OAuth ─┐
+Sheet Upload ─┴─> Sheet Fetcher/Parser ─> Fuzzy Header Normalizer ─> staging_rows
+                                                                          │
+                                                                          ▼
+                                                              Accounting Validator
+                                                              (balance check, spike detection)
+                                                                          │
+                                                                          ▼
+                                                                 ledger_records (commit)
+                                                                          │
+                                                                          ▼
+                                                        Dashboard API (reads from DB only,
+                                                        never live Sheets calls per request)
+                                                                          │
+                                                                          ▼
+                                                            React dashboard (charts, KPIs)
 ```
 
----
-
-## 🗺️ Product Strategy & Enterprise Roadmap
-
-Ledgerly is engineered with a phased product strategy that balances immediate production-ready reliability with a long-term enterprise distribution moat:
-
-### 🚀 Phase 1 — Core Production Pipeline (Current MVP)
-* **Auth & Multi-Tenant RBAC**: Scoped workspace access (`OWNER`, `EDITOR`, `VIEWER`).
-* **Ingestion & Fuzzy Normalization**: Automatic header detection and dictionary variant mapping.
-* **Staging & Validation Area**: Invariant balance checks ($\sum \text{Debits} = \sum \text{Credits}$) and statistical anomaly warnings.
-* **Idempotent Merge Engine**: SHA-256 idempotency key deduplication.
-* **Executive Dashboards**: Deterministic metrics engine for Revenue, Expenses, Net Profit, MoM Growth, and Cash Runway.
-
-### 🤖 Phase 2 — AI-Powered Intelligence (Post-MVP Enhancements)
-* **LLM Header-Mapping Fallback**: AI fallback for edge-case unmapped column headers when dictionary matching confidence is below threshold.
-* **Automated Anomaly Explanations**: Natural-language breakdown of flagged financial spikes (>3x variance).
-* **Financial Tool-Calling Query Agent**: Conversational agent allowing CFOs to query ledger records using structured SQL tool calls.
-
-### 🏛️ Phase 3 — Enterprise Distribution Moat (Live Integration Pipeline)
-* **Direct Financial API Connectors**: Native integrations with **QuickBooks Online API**, **Xero API**, and **Plaid** for automated live bank and ledger feeds.
-* **Universal File Fallback**: Spreadsheet upload serves as an instant fallback for legacy accounting software or bespoke enterprise setups.
+> ⚠️ **Critical Architectural Rule**: The dashboard **never** calls the Google Sheets API on page load. All reads come directly from `ledger_records` or cached aggregates. Google Sheets is only called during a sync job.
 
 ---
 
-## 🔥 Key Technical Highlights & Engineering Design
+## 🗺️ Build & Roadmap Phases
 
-### 1. Smart Ingestion & Fuzzy Header Normalization (`sheetParser.js`)
-* **Flexible Header Auto-Detection**: Scans uploaded spreadsheets across the top 15 rows to detect header boundaries, bypassing title blocks, metadata, and empty rows.
-* **Fuzzy Variant Mapping**: Normalizes inconsistent spreadsheet headers into standard schema fields via a two-pass dictionary matcher:
-  * `"Sales & Revenue"` ← `["sales", "revenue", "income", "turnover", "sales/revenue"]`
-  * `"Salary / Wages"` ← `["salaries & wages", "payroll", "employee expense", "wages"]`
-  * `"Capex Investment"` ← `["capax", "capex", "capital investment", "capital expenditure"]`
-  * `"R&D Expense"` ← `["r&d exp.", "r&d expense", "research & development"]`
-* **Data Sanitization & Security**:
-  * Parses accounting parenthetical negative numbers (e.g., `(15,000)` $\rightarrow$ `-15000`).
-  * Strips currency symbols (`$`, `₹`, `,`) and non-numeric whitespace.
-  * Escapes formula injection prefixes (`=`, `+`, `-`, `@`) by prepending a single quote (`'`).
+### Phase 1 — Core Production MVP (Fully Implemented)
+- **Google OAuth Login**: Session management issuing JWT tokens.
+- **Google Sheets & File Ingestion**: Pick a Google Sheet OR upload `.xlsx`/`.csv` fallback.
+- **Fuzzy Header Normalization**: Maps headers like `"Sales & Revenue"`, `"Turnover"`, or `"Income"` to canonical schema fields.
+- **Staging & Validation Pipeline**: Checks balance invariants ($\sum \text{Debits} = \sum \text{Credits}$ or $\text{Revenue} - \text{Expenses} = \text{Net Profit}$), flags missing categories, and detects statistical spikes (>3x historical moving average).
+- **Atomic Ledger Commit**: Promotes staged rows to `ledger_records` and records audit events atomically within a single SQL transaction.
+- **Multi-Tenant Workspace Roles**: Scoped workspace access (`OWNER`, `EDITOR`, `VIEWER`), with email invitations.
+- **Executive Visual Dashboard**: Renders Revenue, Expenses, Net Profit, MoM Growth KPIs, and Recharts trend visualizations.
+- **Manual "Sync Now" Endpoint**: Re-fetches connected sheets and re-runs the pipeline, rate-limited to 1 per 5 minutes per workspace to respect Google API quotas (~60 read reqs/min).
 
-### 2. Idempotency & Staging Area (`stagingEngine.js`)
-* **Idempotent File Merge**: Computes a SHA-256 idempotency key `hash(fileBuffer + workspaceId)`. If a user attempts to re-upload the same file for a given financial period, the engine returns `409 Conflict (IDEMPOTENT_ALREADY_COMMITTED)` to prevent double-ingesting data.
-* **Staging Area**: Raw parsed rows are inserted into `staging_rows` with a `STAGED` status prior to ledger commitment, enabling pre-commit data review and validation.
+### Phase 2 — Automation & AI (Post-MVP Enhancements)
+- **Scheduled Background Sync**: Automatic daily/hourly syncs via background queue.
+- **LLM Header Mapping Fallback**: AI fallback for edge-case unmapped headers when fuzzy match confidence is low.
+- **Automated Anomaly Explanations**: Plain-English explanations when the spike detector flags a financial anomaly.
+- **Financial Tool-Calling Query Agent**: Conversational agent allowing CFOs to query ledger records using fixed, workspace-scoped tools (`get_kpi()`, `get_category_breakdown()`, `compare_periods()`, `get_variance_flags()`).
 
-### 3. Accounting Rule Validator (`accountingValidator.js`)
-Before staged rows hit the ledger, the validator enforces strict financial invariants:
-* **Balance Invariant Enforcement**: Verifies that total debits equal total credits ($\sum \text{Debits} = \sum \text{Credits}$) or total revenue minus expenses equals stated net profit.
-* **Cost Center Completeness**: Flags rows missing mandatory category or period tags.
-* **Statistical Anomaly / Spike Detection**: Compares current batch totals against historical 3-month moving averages to flag metric variations exceeding a 3x variance threshold.
+### Phase 3 — Scale Hardening & Infrastructure Triggers
 
-### 4. Server-Side Multi-Tenant RBAC (`rbac.js`)
-* Scopes every API endpoint strictly to the user's workspace using `requireWorkspaceRole` middleware:
-  * **OWNER**: Full administrative control, member invitations, staged batch approval/deletion, and workspace deletion.
-  * **EDITOR**: Upload spreadsheets to staging, run validation checks, and update dashboard configurations.
-  * **VIEWER**: Read-only access to committed ledger metrics, executive charts, and reports.
-
-### 5. Transaction-Bound Audit Outbox (`auditLogger.js`)
-* **Atomic Outbox Logging**: Batch staging, validation, role adjustments, and ledger commitments log an audit entry in `audit_events` within the exact same database transaction block (`BEGIN ... COMMIT`).
+| Signal Observed | Action to Take |
+| :--- | :--- |
+| **SQLite write locks/timeouts under heavy load** | Migrate to PostgreSQL |
+| **Running 2+ app instances for uptime** | Move response cache to Redis |
+| **Google API 429 rate limit responses** | Add per-workspace exponential backoff/queuing |
+| **Sheet imports blocking API requests** | Move imports to dedicated background worker scripts |
+| **Multiple advisor users managing several clients** | Re-evaluate multi-source integrations (QuickBooks/Xero/Plaid) |
 
 ---
 
-## 📊 Measured Performance Benchmarks
-
-Captured using the production performance benchmark suite (`node backend/benchmark.js`) under 20 concurrent connections:
-
-| Workload Scenario | Total Requests | Concurrency | Peak Throughput | P50 Latency | P90 Latency | P95 Latency | P99 Latency |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Cold Read** (`/api/user/charts` - Database Scan) | 50 | 5 | **387 req/sec** | **3.98 ms** | **46.36 ms** | **49.48 ms** | **54.00 ms** |
-| **Warm Read** (`/api/user/charts` - In-Memory Cache) | 300 | 20 | **845 req/sec** | **12.54 ms** | **22.08 ms** | **24.64 ms** | **28.34 ms** |
-| **Cached Analytics** (`/api/user/auto-kpis` - KPI Aggregations) | 300 | 20 | **1,315 req/sec** | **7.51 ms** | **14.69 ms** | **31.24 ms** | **38.08 ms** |
-
-> ⚡ **Latency Speedup**: In-memory response caching delivers a **2.0x latency reduction** (P95 latency dropped from **49.48ms to 24.64ms**).
-
----
-
-## 🗄️ Database Schema & Data Model
+## 🗄️ Database Schema (`database.js`)
 
 ```sql
 -- Workspaces (Multi-Tenant Boundaries)
@@ -139,20 +90,43 @@ CREATE TABLE workspace_members (
   UNIQUE(workspace_id, email)
 );
 
--- Import Batches (Idempotency & Staging Tracker)
+-- Connected Google Sheets
+CREATE TABLE connected_sheets (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id     TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  google_sheet_id  TEXT NOT NULL,
+  sheet_name       TEXT NOT NULL,
+  connected_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  sync_frequency   TEXT NOT NULL DEFAULT 'DAILY', -- 'MANUAL' | 'DAILY' | 'HOURLY'
+  last_synced_at   TEXT,
+  last_sync_status TEXT, -- 'SUCCESS' | 'FAILED' | 'RATE_LIMITED'
+  created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Background Sync Jobs Tracker
+CREATE TABLE sync_jobs (
+  id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+  connected_sheet_id INTEGER NOT NULL REFERENCES connected_sheets(id) ON DELETE CASCADE,
+  status             TEXT NOT NULL DEFAULT 'PENDING', -- 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED'
+  error_message      TEXT,
+  started_at         TEXT,
+  finished_at        TEXT
+);
+
+-- Import Batches (Staging Tracker)
 CREATE TABLE import_batches (
   id               INTEGER PRIMARY KEY AUTOINCREMENT,
   workspace_id     TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   filename         TEXT NOT NULL,
   file_hash        TEXT NOT NULL, -- SHA-256 Idempotency Key
-  status           TEXT NOT NULL DEFAULT 'STAGED', -- 'STAGED' | 'COMMITTED' | 'VALIDATION_FAILED'
+  status           TEXT NOT NULL DEFAULT 'STAGED',
   ingested_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
   row_count        INTEGER NOT NULL DEFAULT 0,
   validation_notes TEXT,
   created_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Relational Ledger Records (Indexed Analytical Querying)
+-- Relational Ledger Records
 CREATE TABLE ledger_records (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   workspace_id  TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -168,7 +142,7 @@ CREATE TABLE ledger_records (
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- Transaction-Bound Audit Events
+-- Audit Events
 CREATE TABLE audit_events (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   workspace_id  TEXT REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -183,37 +157,16 @@ CREATE TABLE audit_events (
 
 ---
 
-## 🛠️ API Reference
+## 🧪 Verification & Testing
 
-### 🔐 Authentication & Session
-* `POST /api/auth/google` — Authenticate user via Google OAuth 2.0 token & issue JWT.
-* `GET /api/auth/me` — Return authenticated user profile and permissions.
-
-### 🏢 Workspace & RBAC
-* `POST /api/workspaces` — Create a new multi-tenant workspace (Caller becomes `OWNER`).
-* `GET /api/workspaces` — List workspaces where caller is an active member.
-* `POST /api/workspaces/:workspaceId/members` — Invite user to workspace (`OWNER` required).
-
-### 📥 Ingestion & Ledger Pipeline
-* `POST /api/workspaces/:workspaceId/imports/stage` — Upload spreadsheet file $\rightarrow$ Idempotency Check $\rightarrow$ Stage Rows $\rightarrow$ Run Accounting Rules (`EDITOR` or `OWNER` required).
-* `POST /api/workspaces/:workspaceId/imports/:batchId/commit` — Atomically commit staged batch to `ledger_records` and record audit log outbox (`EDITOR` or `OWNER` required).
-
-### 📈 Metrics & Dashboard Analytics
-* `GET /api/user/charts` — Get normalized financial chart datasets for workspace.
-* `GET /api/user/auto-kpis` — Get auto-calculated financial KPIs (Revenue, Expenses, Net Profit, MoM Growth, Cash Runway).
-
----
-
-## 🧪 Testing & Verification
-
-Run the comprehensive multi-tenant SDE test suite:
+Run the multi-tenant test suite:
 
 ```bash
 cd backend
 npm test
 ```
 
-### Verified Test Outputs:
+### Output:
 ```text
 🧪 Starting Ledgerly Multi-Tenant SDE Test Suite...
 
@@ -233,44 +186,22 @@ npm test
 
 ## 🚀 Quickstart & Local Setup
 
-### Prerequisites
-* **Node.js**: v18.0.0 or higher
-* **npm**: v9.0.0 or higher
-
-### 1. Clone & Install Dependencies
 ```bash
 git clone https://github.com/Heeral03/Ledgerly.git
 cd Ledgerly
 
-# Install Backend Dependencies
+# Backend Setup
 cd backend
 npm install
-
-# Install Frontend Dependencies
-cd ../frontend
-npm install
-```
-
-### 2. Environment Configuration
-Create a `.env` file in `backend/`:
-```env
-PORT=4000
-JWT_SECRET=your_jwt_secret_key_here
-ENCRYPTION_KEY=12345678901234567890123456789012
-```
-
-### 3. Run Development Servers
-```bash
-# Start Backend API Server (Port 4000)
-cd backend
 npm start
 
-# Start Frontend Dev Server (Port 3000 / Vite)
-cd frontend
+# Frontend Setup (in separate terminal)
+cd ../frontend
+npm install
 npm run dev
 ```
 
 ---
 
 ## 📜 License
-Distributed under the **MIT License**. See `LICENSE` for details.
+Distributed under the **MIT License**.
