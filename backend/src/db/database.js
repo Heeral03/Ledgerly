@@ -186,7 +186,7 @@ db.exec(`
     UNIQUE(workspace_id, period, metric_name)
   );
 
-  -- Audit Events (Tamper-Evident SHA-256 Hash Chain)
+  -- Audit Events (Clean Transaction-Bound Audit Outbox)
   CREATE TABLE IF NOT EXISTS audit_events (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     workspace_id  TEXT REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -196,8 +196,45 @@ db.exec(`
     resource_id   TEXT,
     metadata_json TEXT,
     request_id    TEXT,
-    event_hash    TEXT NOT NULL,
-    previous_hash TEXT NOT NULL,
+    event_hash    TEXT NOT NULL DEFAULT '',
+    previous_hash TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  -- Industry Clean Staging & Ledger Architecture Tables
+  CREATE TABLE IF NOT EXISTS import_batches (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id     TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    filename         TEXT NOT NULL,
+    file_hash        TEXT NOT NULL, -- Idempotency SHA-256 key
+    status           TEXT NOT NULL DEFAULT 'STAGED', -- 'STAGED' | 'COMMITTED' | 'VALIDATION_FAILED'
+    ingested_by      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    row_count        INTEGER NOT NULL DEFAULT 0,
+    validation_notes TEXT,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS staging_rows (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id      INTEGER NOT NULL REFERENCES import_batches(id) ON DELETE CASCADE,
+    row_index     INTEGER NOT NULL,
+    raw_data_json TEXT NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'STAGED'
+  );
+
+  CREATE TABLE IF NOT EXISTS ledger_records (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id  TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    batch_id      INTEGER NOT NULL REFERENCES import_batches(id) ON DELETE CASCADE,
+    period        TEXT NOT NULL,
+    category      TEXT NOT NULL,
+    revenue       REAL NOT NULL DEFAULT 0,
+    expenses      REAL NOT NULL DEFAULT 0,
+    net_profit    REAL NOT NULL DEFAULT 0,
+    debit         REAL NOT NULL DEFAULT 0,
+    credit        REAL NOT NULL DEFAULT 0,
+    row_data_json TEXT,
     created_at    TEXT NOT NULL DEFAULT (datetime('now'))
   );
 

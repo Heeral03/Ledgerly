@@ -131,6 +131,50 @@ async function runTests() {
     assert.strictEqual(integrity.count >= 2, true);
   });
 
+  // Test 7: Accounting Rule Validator (Balance Invariant Check)
+  test('Accounting Rule Validator (Balance Invariants & Validation)', () => {
+    const { validateAccountingBatch } = require('../src/services/accountingValidator');
+    const validRows = [
+      { Month: '2026-01', 'Sales & Revenue': '100000', 'Salary / Wages': '60000', 'Direct Expense': '40000', Debit: '100000', Credit: '100000' }
+    ];
+    const res = validateAccountingBatch(validRows);
+    assert.strictEqual(res.isValid, true);
+    assert.strictEqual(res.summary.totalRevenue, 100000);
+    assert.strictEqual(res.summary.totalExpenses, 100000);
+
+    const invalidRows = [
+      { Month: '2026-01', 'Sales & Revenue': '100000', Debit: '50000', Credit: '100000' }
+    ];
+    const invalidRes = validateAccountingBatch(invalidRows);
+    assert.strictEqual(invalidRes.isValid, false);
+    assert.strictEqual(invalidRes.errors.length > 0, true);
+  });
+
+  // Test 8: Idempotency & Staging Area Pipeline
+  test('Idempotent Ingestion & Staging Area Pipeline', () => {
+    const { stageImportBatch, commitStagedBatch } = require('../src/services/stagingEngine');
+    const dummyBuffer = Buffer.from('dummy-excel-file-content-for-idempotency-test');
+    const sampleRows = [
+      { Month: '2026-01', 'Sales & Revenue': '150000', 'Salary / Wages': '100000', 'Other Expense': '50000', Debit: '150000', Credit: '150000' }
+    ];
+
+    // 1. Stage Batch
+    const stageRes = stageImportBatch(wsA, 'q1_financials.xlsx', dummyBuffer, sampleRows, aliceId);
+    assert.strictEqual(stageRes.isDuplicate, false);
+    assert.strictEqual(stageRes.status, 'STAGED');
+    assert.strictEqual(stageRes.batchId > 0, true);
+
+    // 2. Commit Staged Batch
+    const commitRes = commitStagedBatch(stageRes.batchId, wsA, aliceId);
+    assert.strictEqual(commitRes.success, true);
+    assert.strictEqual(commitRes.status, 'COMMITTED');
+
+    // 3. Test Idempotency: Duplicate upload attempt must be rejected as IDEMPOTENT_ALREADY_COMMITTED
+    const duplicateRes = stageImportBatch(wsA, 'q1_financials.xlsx', dummyBuffer, sampleRows, aliceId);
+    assert.strictEqual(duplicateRes.isDuplicate, true);
+    assert.strictEqual(duplicateRes.status, 'IDEMPOTENT_ALREADY_COMMITTED');
+  });
+
   console.log(`\n📊 Test Suite Summary: ${passed} Passed, ${failed} Failed.`);
   if (failed > 0) process.exit(1);
 

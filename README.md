@@ -36,38 +36,29 @@ Ledgerly provides an end-to-end pipeline from raw data upload to visual analytic
 └───────────────────────────┘     └────────────────────────────────┘     └─────────────────────────────┘
 ```
 
-### 1. Smart Ingestion, Fuzzy Normalization & Security Sanitization
-- **Flexible Header Auto-Detection**: Scans uploaded Excel (`.xlsx`, `.xls`, `.csv`) or linked Google Sheets to automatically detect header rows across the top 15 rows (skipping empty rows or title blocks).
-- **Fuzzy Column Variant Mapping**: Normalizes common variations in column headers into standardized schema fields via two-pass dictionary lookup:
-  - `"Sales & Revenue"` ← `["sales", "revenue", "income", "turnover", "sales/revenue"]`
-  - `"Capex Investment"` ← `["capax", "capex", "capital investment", "capital expenditure"]`
-  - `"R&D Expense"` ← `["r&d exp.", "r&d expense", "research & development"]`
-  - `"Salary / Wages"` ← `["salaries & wages", "payroll", "employee expense"]`
-  - `"Profit & Loss"` ← `["p&l", "net profit", "profit / loss"]`
-- **Data & Text Sanitization**: 
-  - Parses accounting parenthetical negative numbers (e.g., `(15,000)` → `-15000`).
-  - Strips currency symbols (`$`, `₹`, `,`).
-  - Escapes formula injection prefixes (`=`, `+`, `-`, `@`) by prepending a single quote (`'`).
+### 1. Staging $\rightarrow$ Accounting Validation $\rightarrow$ Ledger Pipeline
+- **Staging Area (`import_batches` & `staging_rows`)**: Raw spreadsheet rows are parsed and stored in a staging state prior to ledger commitment, allowing pre-commit review.
+- **Accounting Rule Validator (`accountingValidator.js`)**: 
+  - **Balance Invariant Enforcement**: Verifies that total debits equal total credits ($\sum \text{Debits} = \sum \text{Credits}$) or total revenue minus expenses equals net profit.
+  - **Category & Cost Center Completeness**: Flags rows missing mandatory category fields.
+  - **Anomaly / Spike Detection**: Compares current batch metric totals against historical 3-month moving averages to flag statistical spikes (>3x variance).
+- **Idempotent Merge Engine**: Computes a SHA-256 idempotency key (`hash(fileBuffer + workspaceId)`). Re-uploading the exact same financial file returns `409 Conflict / IDEMPOTENT_ALREADY_COMMITTED`, preventing double-ingestion of the same financial cycle.
 
-### 2. Cell-Level AES-256-GCM Encryption & Tamper Detection
-- **Field-Level Security**: Each numeric and text cell value is individually encrypted using **AES-256-GCM** with a 96-bit random IV and 128-bit Authentication Tag (`iv:authTag:ciphertext`).
-- **Integrity Verification**: Any direct modification or tampering with database values triggers authentication tag verification failure during decryption, rejecting malicious or corrupted entries.
-- **Protection at Rest**: Unencrypted metrics never hit the disk; values remain encrypted even if raw database backup files are leaked.
+### 2. Relational Ledger Storage & Queryable Analytics
+- **PostgreSQL / Relational SQLite Design**: Analytical numeric fields (`debit`, `credit`, `net_amount`, `category`, `period`) are stored unencrypted, enabling fast indexed SQL queries (`SUM()`, `AVG()`).
+- **Standard PII Envelope Encryption**: Standard application-level envelope encryption reserved strictly for true PII (bank accounts/tax IDs).
 
-### 3. Deterministic Metrics Engine & Two-Phase Transactional Imports
-- **Deterministic Metrics Computation**: Calculates Net Profit, MoM Revenue Growth, and Cash Runway using strict math formulas and stores results in a deterministic `normalized_metrics` SQLite table for ultra-fast query execution.
-- **Two-Phase Imports**: Validates all spreadsheet data in a temporary staging schema prior to atomical SQL insertion.
-- **Tamper-Evident SHA-256 Audit Logging**: Every administrative and data mutation action logs an append-only audit entry linked by cryptographic SHA-256 hash chains (`previous_hash` + `entry_hash`), guaranteeing immutable audit trails.
-
-### 4. Role-Based Access Control (RBAC) & Multi-Tenant Isolation
-- **Admin Whitelist Enforcement**: Only users whose email addresses have been approved/whitelisted by an Admin (or invited by a Workspace Owner) can sign in.
+### 3. Role-Based Access Control (RBAC) & Multi-Tenant Authorization
 - **Granular Member Roles**:
-  - **OWNER**: Complete control over workspace settings, spreadsheet sync, member invites, and workspace deletion.
-  - **EDITOR**: Updates dashboard configurations, syncs data, and manages spreadsheet content.
-  - **VIEWER**: Read-only access to visual analytics, charts, and metrics summaries.
+  - **OWNER**: Manage workspace settings, approve/commit staged batches, manage members, delete workspace.
+  - **EDITOR**: Upload spreadsheets to staging area, run validation checks, update dashboard configurations.
+  - **VIEWER**: Read-only access to committed ledger analytics, visual charts, and executive reports.
+
+### 4. Clean Transaction-Bound Audit Trail
+- **Transaction-Bound Outbox**: Every batch staging, validation, and commitment atomically creates an audit event in `audit_events` within the same database transaction block.
 
 ### 5. Multi-Tenant SDE Test Suite
-- Run comprehensive multi-tenant tests validating cryptography, isolation, transactional rollbacks, metrics engine, and audit log hash chains:
+- Run comprehensive multi-tenant tests validating accounting rule validation, idempotency, isolation, transactional rollbacks, and audit outbox:
   ```bash
   npm test
   ```
